@@ -64,7 +64,7 @@ try {
       await page.waitForFunction(() => window.kimiGame.snapshot().state === 'result', {}, {timeout: 75000});
       await page.locator('#player-name').fill('Étoile iPhone');
       await page.locator('#save-score').tap();
-      await page.waitForFunction(() => document.querySelector('#score-status').textContent.includes('Score enregistré'));
+      await page.waitForFunction(() => document.querySelector('#score-status').textContent.includes('Score saved!'));
       const score = await page.evaluate(() => window.kimiGame.snapshot().score);
       const entries = (await (await fetch(`${url}/api/leaderboard`)).json()).leaderboard;
       assert.equal(entries.length, 1, 'Test mode did not publish scores');
@@ -80,6 +80,14 @@ try {
         assert.equal(await page.locator('#replay').isVisible(), true);
       }
       await page.locator('#replay').tap();
+      await page.waitForFunction(() => window.kimiGame.snapshot().state === 'ready');
+      assert.equal(await page.locator('#start-screen').isVisible(), true);
+      assert.equal(await page.locator('#countdown').isVisible(), false);
+      assert.equal(await page.locator('video').evaluate(v => v.paused), true);
+      assert.equal(await page.evaluate(() => window.kimiGame.snapshot().elapsed), 0);
+      await page.waitForTimeout(1000);
+      assert.equal(await page.evaluate(() => window.kimiGame.snapshot().state), 'ready');
+      await page.locator('#start').tap();
       await page.waitForFunction(() => window.kimiGame.snapshot().state === 'countdown');
       assert.equal(await page.evaluate(() => window.kimiGame.snapshot().score), 0);
       assert.deepEqual(errors, []);
@@ -94,8 +102,9 @@ try {
       await fallback.goto(url);
       await fallback.waitForFunction(() => window.kimiGame?.snapshot().state === 'ready', {}, {timeout: 10000});
       await fallback.locator('#start').tap();
-      await fallback.waitForFunction(() => window.kimiGame.snapshot().state === 'playing', {}, {timeout: 5000});
-      console.log('WebKit: game starts despite unavailable video and audio.');
+      await fallback.waitForFunction(() => window.kimiGame.snapshot().state === 'ready' && document.querySelector('#loading').textContent.includes('Video unavailable'), {}, {timeout: 20000});
+      assert.equal(await fallback.locator('#countdown').isVisible(), false);
+      console.log('WebKit: unavailable video keeps START available without launching gameplay.');
     })(),
   ]);
 } finally {
