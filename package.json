@@ -1,0 +1,1 @@
+{"name":"kimi-wishes","private":true,"type":"module","scripts":{"test":"node --test tests/*.test.js","test:server":".venv/bin/python -m unittest discover -s tests -p 'test_*.py' -v","start":".venv/bin/gunicorn --bind 127.0.0.1:8080 --workers 1 --threads 4 'server:create_app()'","test:browser":"node tests/browser-smoke.mjs"},"devDependencies":{"playwright":"1.65.0"}}

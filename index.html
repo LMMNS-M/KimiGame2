@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="theme-color" content="#091127"><title>Kimi · Shooting Wishes</title>
+<link rel="icon" href="assets/images/stars/gold-star.png"><link rel="stylesheet" href="css/game.css">
+</head>
+<body>
+<main id="game" aria-label="抓住星星 · Shooting Wishes">
+<video id="background" playsinline preload="auto" aria-hidden="true"></video>
+<div id="veil"></div>
+<div id="playfield" aria-label="Attrape les étoiles blanches et dorées, évite les rouges"></div>
+<div id="timer" hidden role="progressbar" aria-label="Temps restant" aria-valuemin="0" aria-valuemax="60"><div id="time-fill"></div></div>
+<button id="sound" aria-label="Couper le son" hidden>♪</button>
+<section id="start-screen" class="screen"><div class="start-content"><div data-art="rules-frame"></div><button id="start" class="image-button" aria-label="Start Game" disabled></button><p id="loading" role="status">Chargement des étoiles…</p></div></section>
+<div id="countdown" hidden aria-live="polite"></div>
+<div id="announcement" hidden></div>
+<div id="hud" hidden><div id="wishes"><div data-art="wishes-counter-frame"></div><output id="score">0</output><div id="combo" data-art="combo-x2" hidden></div></div><div id="best"><div data-art="best-score-frame"></div><output id="best-value">0</output></div></div>
+<section id="end-screen" class="screen" hidden aria-label="Résultat"><div class="end-content">
+<div id="result"><div data-art="result-frame"></div><output id="final-score">0</output><div id="record" data-art="new-best-score" hidden></div></div>
+<div id="end-best"><div data-art="best-score-frame-end"></div><output id="end-best-value">0</output></div>
+<section id="leaderboard" aria-labelledby="leaderboard-title" lang="fr">
+<header><h2 id="leaderboard-title">✦ Meilleurs scores</h2><button id="refresh-scores" type="button" aria-label="Actualiser le classement">↻</button></header>
+<p class="leaderboard-caption">Les 10 meilleures parties · tous les joueurs</p>
+<form id="score-form"><label for="player-name">Ton pseudo public</label><div class="score-fields"><input id="player-name" name="name" maxlength="20" required autocomplete="nickname" placeholder="Ton pseudo"><button id="save-score" type="submit" disabled>Enregistrer</button></div></form>
+<p id="score-status" role="status"></p>
+<div class="leaderboard-scroll" tabindex="0" role="region" aria-label="Tableau des meilleurs scores"><table><thead><tr><th scope="col">#</th><th scope="col">Joueur</th><th scope="col">Score</th></tr></thead><tbody id="leaderboard-rows"></tbody></table><p id="leaderboard-empty">Les étoiles attendent leur premier champion ✨</p></div>
+<p id="leaderboard-status" role="status"></p>
+</section>
+<div class="end-buttons"><button id="replay" class="image-button" aria-label="Replay"></button><button id="next" class="image-button" aria-label="Next" hidden></button></div><p id="next-message" role="status" hidden></p>
+</div></section>
+<button id="resume" hidden>Toucher pour reprendre ♪</button>
+</main><script type="module" src="js/game.js"></script>
+<script type="module">if(new URLSearchParams(location.search).has("test")) import("./tests/browser-check.js");</script></body></html>

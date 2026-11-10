@@ -1,0 +1,18 @@
+[Unit]
+Description=Kimi Shooting Wishes and SQLite leaderboard
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/Documents/KimiGame2
+Environment=KIMI_DATABASE=%h/.local/share/kimi-game/scores.sqlite3
+Environment=KIMI_ALLOWED_ORIGINS=https://lmmns-m.github.io
+ExecStart=%h/Documents/KimiGame2/.venv/bin/gunicorn --bind 127.0.0.1:8080 --workers 1 --threads 4 --access-logfile - --error-logfile - server:create_app()
+Restart=on-failure
+RestartSec=5
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=default.target
