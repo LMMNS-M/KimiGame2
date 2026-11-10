@@ -2,7 +2,7 @@ import {CONFIG as C} from './config.js';
 import {IMAGES, VIDEO} from './assets.js';
 import {createTimeline,Score} from './timeline.js';
 import {AudioManager} from './audio.js';
-import {loadWithin,optional,seekVideo,prepareVideo} from './loading.js';
+import {loadWithin,optional,seekVideo,prepareVideo,waitForPlayback} from './loading.js';
 import {resetLeaderboard,beginLeaderboardRun,showLeaderboard} from './leaderboard.js';
 const $=id=>document.getElementById(id);
 const STORAGE_KEY=new URLSearchParams(location.search).has('test')?'kimi-wishes-test-best':'kimi-wishes-best';
@@ -15,10 +15,17 @@ for(const el of document.querySelectorAll('[data-art]'))el.append(art(el.dataset
 $('game').style.setProperty('--play-area',`${C.PLAY_AREA_RATIO*100}%`);
 $('game').style.setProperty('--hitbox-size',`${11*C.HITBOX_SCALE}cqw`);
 // The PNG is 15% smaller than its current 87.5% rendering. The hitbox is
-// independently based on 140% of the original 11cqw visual reference.
+// independently based on 161% of the original 11cqw visual reference.
 $('game').style.setProperty('--visual-ratio',`${87.5*.85/C.HITBOX_SCALE}%`);
 const video=$('background'),audio=new AudioManager();video.src=VIDEO;video.volume=.8;
 const stopPreview=prepareVideo(video);
+let lastRedFlash=-Infinity;
+function flashRed(now){
+ // One soft pulse per catch, with a short cooldown for near-simultaneous reds.
+ if(now-lastRedFlash<400)return;
+ lastRedFlash=now;
+ const overlay=$('red-flash');overlay.classList.remove('hit');void overlay.offsetWidth;overlay.classList.add('hit');
+}
 let state='loading',score=new Score(),timeline=[],cursor=0,active=new Map(),effects=[],epoch=0,goAt=0,endAt=0,lastCount=-1,hurry=false,newRecord=false,recordShown=false,best=0,priorBest=0,run=0,width=0,height=0;
 try{best=Math.max(0,Math.trunc(Number(localStorage.getItem(STORAGE_KEY)))||0);}catch{}
 $('best-value').textContent=best;
@@ -32,16 +39,22 @@ function bindButton(id,normal,pressed,sound,action){
 function syncScore(){$('score').textContent=score.value;$('best-value').textContent=Math.max(best,score.value);}
 function comboBreak(){audio.play('combo-break');$('combo').className='leave';effects.push({until:performance.now()+180,done:()=>{$('combo').hidden=!score.combo;}});}
 function reset(){
+ $('red-flash').classList.remove('hit');lastRedFlash=-Infinity;
  resetLeaderboard();
  run++;audio.stop();active.clear();effects=[];$('playfield').replaceChildren();score=new Score();timeline=createTimeline();cursor=0;hurry=false;lastCount=-1;recordShown=false;priorBest=best;newRecord=false;
  for(const id of ['end-screen','record','announcement','countdown','combo','resume'])$(id).hidden=true;
  $('combo').className='';$('timer').classList.remove('urgent');$('time-fill').style.transform='scaleX(1)';$('next-message').textContent='';syncScore();
 }
 async function start(sound){
- reset();state='starting';$('loading').textContent='';
+ reset();state='starting';$('game').dataset.scene='start';$('start-screen').hidden=false;$('loading').textContent='Loading the stars…';
  // Both media activation calls originate in the button gesture, before awaiting anything.
  stopPreview();optional(()=>audio.unlock());seekVideo(video,0);video.muted=audio.muted;
- optional(()=>video.play(),()=>{$('resume').hidden=false;});
+ const ready=waitForPlayback(video);
+ optional(()=>video.play(),()=>video.dispatchEvent(new Event('error')));
+ try{await ready;}catch{
+  video.pause();state='ready';$('loading').textContent='Video unavailable. Tap START to try again.';return;
+ }
+ $('loading').textContent='';$('game').dataset.scene='playing';
  beginLeaderboardRun();audio.play(sound);epoch=performance.now();goAt=epoch+3000;state='countdown';$('start-screen').hidden=true;$('veil').classList.add('clear');$('hud').hidden=false;$('timer').hidden=false;$('sound').hidden=false;
 }
 bindButton('start','start-game-normal','start-game-pressed','button-start',start);
@@ -55,9 +68,9 @@ export function onNext(){
  const event=new CustomEvent('kimi:next',{detail:result,cancelable:true});
  if(!window.dispatchEvent(event))return;
  if(C.NEXT_URL)window.location.assign(C.NEXT_URL);
- else $('next-message').textContent='À suivre… ✨ Vous pouvez rejouer pour remplir encore plus de souhaits.';
+ else $('next-message').textContent='More to come… ✨ Play again to collect even more wishes.';
 }
-$('sound').addEventListener('click',()=>{audio.mute(!audio.muted);video.muted=audio.muted;$('sound').textContent=audio.muted?'♪̸':'♪';$('sound').setAttribute('aria-label',audio.muted?'Activer le son':'Couper le son');});
+$('sound').addEventListener('click',()=>{audio.mute(!audio.muted);video.muted=audio.muted;$('sound').textContent=audio.muted?'♪̸':'♪';$('sound').setAttribute('aria-label',audio.muted?'Unmute sound':'Mute sound');});
 function count(n){$('countdown').hidden=false;$('countdown').textContent=n===3?'GO!':String(3-n);$('countdown').className='';void $('countdown').offsetWidth;$('countdown').className='pop';audio.play(n===3?'countown-go':'countdown-beep');}
 function warning(event){const node=document.createElement('div');node.className='warning';node.style.left=`${event.x*100}%`;$('playfield').append(node);active.set(event.id,{event,node,falling:false});}
 function fall(item){item.node.remove();const node=document.createElement('div');node.className=`star ${item.event.type}`;node.dataset.id=item.event.id;node.append(art(`${item.event.type}-star`));$('playfield').append(node);item.node=node;item.falling=true;audio.shooting();}
@@ -66,6 +79,7 @@ function catchStar(item,now){
  if(state!=='playing'||now>=goAt+C.GAME_DURATION*1000||!item.falling||!active.has(item.event.id))return;
  const elapsed=(now-goAt)/1000;if(elapsed<item.event.at||elapsed>=item.event.at+C.STAR_FALL_DURATION)return;
  active.delete(item.event.id);item.node.remove();const result=score.catch(item.event.type);syncScore();
+ if(item.event.type==='red')flashRed(now);
  audio.play(item.event.type==='red'?'red-star-cach':`${item.event.type}-star-catch`);
  if(result.bonus)audio.play('combo-bonus');if(result.broken)comboBreak();
  if(result.activated){audio.play('combo-activate');$('combo').hidden=false;$('combo').className='enter';}
@@ -77,7 +91,7 @@ $('playfield').addEventListener('pointerdown',event=>{
 });
 function announce(kind){$('announcement').replaceChildren(art(kind==='hurry'?'hurry-up':'time-up'));$('announcement').className='';$('announcement').setAttribute('aria-label',kind==='hurry'?'HURRY UP!':'TIME UP!');$('announcement').hidden=false;}
 function finish(){state='ending';endAt=goAt+C.GAME_DURATION*1000;for(const item of active.values())item.node.remove();active.clear();$('countdown').hidden=true;$('time-fill').style.transform='scaleX(0)';announce('time');audio.play('time-up');newRecord=score.value>priorBest;if(newRecord){best=score.value;try{localStorage.setItem(STORAGE_KEY,String(best));}catch{}}}
-function showResult(){state='result';$('hud').hidden=true;$('timer').hidden=true;$('announcement').hidden=true;$('final-score').textContent=score.value;$('end-best-value').textContent=best;$('end-screen').hidden=false;audio.play('end-screen');showLeaderboard(score.value);}
+function showResult(){state='result';$('game').dataset.scene='result';$('hud').hidden=true;$('timer').hidden=true;$('announcement').hidden=true;$('final-score').textContent=score.value;$('end-best-value').textContent=best;$('end-screen').hidden=false;audio.play('end-screen');showLeaderboard(score.value);}
 function tick(now){
  effects=effects.filter(e=>{if(now>=e.until){e.done();return false;}return true;});
  if(state==='countdown'){
@@ -110,6 +124,7 @@ document.addEventListener('visibilitychange',()=>{if(document.hidden){optional((
 $('resume').addEventListener('click',()=>{optional(()=>audio.unlock());optional(()=>Promise.resolve(video.play()).then(()=>{$('resume').hidden=true;}));});
 async function init(){
  // Reuse TarnStarGame's iPhone-tested loading: media may preload metadata only.
+ await Promise.all(['start','result'].map(name=>{const img=new Image();img.src=`assets/images/backgrounds/${name}.webp`;return img.decode().catch(()=>{});}));
  await loadWithin([
   ()=>audio.preload(),
   ...Object.values(IMAGES).map(a=>()=>new Promise(resolve=>{const img=new Image();img.onload=img.onerror=resolve;img.src=a.src;}))

@@ -7,7 +7,7 @@ export const CONFIG = Object.freeze({
   RED_STAR_COUNT: 12,
   STAR_FALL_DURATION: 1,
   WARNING_DURATION: 0.5,
-  HITBOX_SCALE: 1.40,
+  HITBOX_SCALE: 1.61,
   COMBO_REQUIRED: 3,
   HURRY_UP_AT: 45,
   NEXT_URL: '', // Renseigner ici la destination du bouton NEXT.
