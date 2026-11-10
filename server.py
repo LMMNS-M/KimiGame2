@@ -65,15 +65,15 @@ def create_app(config=None):
             origin = request.headers.get('Origin')
             allowed = not origin or origin.rstrip('/') == request.host_url.rstrip('/') or origin in app.config['ALLOWED_ORIGINS']
             if not allowed:
-                return fail('Origine non autorisée.', 403)
+                return fail('Origin not allowed.', 403)
             if request.method == 'OPTIONS':
                 return '', 204
         if request.path.startswith('/api/') and request.method == 'POST':
             if request.content_length and request.content_length > app.config['MAX_CONTENT_LENGTH']:
-                return fail('Requête trop volumineuse.', 413)
+                return fail('Request too large.', 413)
             # JSON-only writes, restricted to our explicit frontend origins.
             if not request.is_json:
-                return fail('Le corps doit être au format JSON.', 415)
+                return fail('Request body must be JSON.', 415)
 
     @app.after_request
     def headers(response):
@@ -92,12 +92,12 @@ def create_app(config=None):
     @app.errorhandler(400)
     @app.errorhandler(413)
     def invalid_request(error):
-        return fail('Requête invalide ou trop volumineuse.', error.code)
+        return fail('Invalid or oversized request.', error.code)
 
     @app.errorhandler(sqlite3.Error)
     def database_error(error):
         app.logger.error('Leaderboard database error: %s', error)
-        return fail('Classement temporairement indisponible. Réessayez.', 503)
+        return fail('Leaderboard temporarily unavailable. Please try again.', 503)
 
     def leaders(db):
         rows = db.execute('SELECT id, name, score FROM scores ORDER BY score DESC, id ASC LIMIT 10')
@@ -118,7 +118,7 @@ def create_app(config=None):
     @app.post('/api/runs')
     def begin_run():
         if not isinstance(request.get_json(), dict):
-            return fail('Requête invalide.', 400)
+            return fail('Invalid request.', 400)
         now = time.time()
         address = hashlib.sha256(address_salt + (request.remote_addr or '').encode()).hexdigest()
         token = secrets.token_urlsafe(32)
@@ -128,7 +128,7 @@ def create_app(config=None):
             count = db.execute('SELECT COUNT(*) FROM runs WHERE address_hash = ? AND started > ?',
                                (address, now - 3600)).fetchone()[0]
             if count >= app.config['RUNS_PER_HOUR']:
-                return fail('Trop de parties démarrées. Réessayez plus tard.', 429)
+                return fail('Too many games started. Please try again later.', 429)
             db.execute('INSERT INTO runs VALUES (?, ?, ?)',
                        (hashlib.sha256(token.encode()).hexdigest(), now, address))
         return jsonify(token=token), 201
@@ -137,17 +137,17 @@ def create_app(config=None):
     def submit_score():
         body = request.get_json()
         if not isinstance(body, dict):
-            return fail('Résultat invalide.', 400)
+            return fail('Invalid result.', 400)
         token, name, score = body.get('token'), body.get('name'), body.get('score')
         if not isinstance(token, str) or not 20 <= len(token) <= 100:
-            return fail('Partie inconnue. Relancez une partie.', 400)
+            return fail('Unknown game. Start a new game.', 400)
         if not isinstance(name, str):
-            return fail('Choisissez un pseudo de 1 à 20 caractères.', 400)
+            return fail('Choose a nickname between 1 and 20 characters.', 400)
         name = unicodedata.normalize('NFC', name).strip()
         if not 1 <= len(name) <= 20 or any(unicodedata.category(c).startswith('C') for c in name):
-            return fail('Choisissez un pseudo de 1 à 20 caractères, sans caractères de contrôle.', 400)
+            return fail('Choose a nickname between 1 and 20 characters, without control characters.', 400)
         if type(score) is not int or not 0 <= score <= 165:
-            return fail('Score invalide.', 400)
+            return fail('Invalid score.', 400)
         token_hash = hashlib.sha256(token.encode()).hexdigest()
         with connect() as db:
             db.execute('BEGIN IMMEDIATE')
@@ -155,12 +155,12 @@ def create_app(config=None):
             if existing:
                 if existing['name'] == name and existing['score'] == score:
                     return saved_result(db, existing)
-                return fail('Cette partie a déjà été enregistrée.', 409)
+                return fail('This game has already been saved.', 409)
             run = db.execute('SELECT started FROM runs WHERE token_hash = ?', (token_hash,)).fetchone()
             if not run or time.time() - run['started'] > app.config['RUN_TTL']:
-                return fail('Partie expirée. Rejouez pour enregistrer un score.', 410)
+                return fail('Game expired. Play again to save a score.', 410)
             if time.time() - run['started'] < app.config['MIN_RUN_SECONDS']:
-                return fail('La partie n’est pas encore terminée.', 409)
+                return fail('The game has not finished yet.', 409)
             cursor = db.execute('INSERT INTO scores (token_hash, name, score, created) VALUES (?, ?, ?, ?)',
                                 (token_hash, name, score, time.time()))
             row = db.execute('SELECT id, name, score FROM scores WHERE id = ?', (cursor.lastrowid,)).fetchone()
@@ -180,9 +180,9 @@ def create_app(config=None):
     def public_file(path):
         # Never expose the database, Git metadata, server code or environment.
         if path.split('/')[0] not in {'assets', 'css', 'js', 'tests'}:
-            return fail('Fichier introuvable.', 404)
+            return fail('File not found.', 404)
         if path.startswith('tests/') and path != 'tests/browser-check.js':
-            return fail('Fichier introuvable.', 404)
+            return fail('File not found.', 404)
         folder, _, filename = path.partition('/')
         return send_from_directory(ROOT / folder, filename, conditional=True)
 
