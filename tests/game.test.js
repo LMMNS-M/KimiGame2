@@ -28,7 +28,7 @@ test('replay randomise les séquences',()=>{assert.notDeepEqual(createTimeline()
 test('tous les chemins correspondent aux fichiers réels', async()=>{
  const {IMAGES,SOUNDS,VIDEO}=await import('../js/assets.js');
  const {access}=await import('node:fs/promises');
- assert.equal(Object.keys(IMAGES).length,18);
+ assert.equal(Object.keys(IMAGES).length,19);
  assert.equal(Object.keys(SOUNDS).length,19);
  await Promise.all([...Object.values(IMAGES).map(a=>a.src),...Object.values(SOUNDS),VIDEO].map(path=>access(new URL('../'+path,import.meta.url))));
 });
