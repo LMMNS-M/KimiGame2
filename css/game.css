@@ -308,11 +308,11 @@ output {
   align-items:center;
   flex-direction:column;
   gap:2cqw;
-  padding:10cqw 0 3cqw
+  padding:6cqw 0 3cqw
 }
 #result {
   position:relative;
-  width:60%;
+  width:76%;
   animation:pop .5s cubic-bezier(.2,.8,.3,1.15)
 }
 #final-score {
@@ -320,25 +320,14 @@ output {
   top:49%;
   width:59%;
   height:30%;
-  font-size:8cqw
+  font-size:10cqw
 }
 #record {
   position:absolute;
-  width:45%;
-  right:-6%;
-  top:-12%;
+  width:35%;
+  right:-17%;
+  top:40%;
   animation:pop .4s both
-}
-#end-best {
-  width:60%;
-  position:relative
-}
-#end-best-value {
-  left:59%;
-  top:16%;
-  width:28%;
-  height:65%;
-  font-size:4cqw
 }
 .end-buttons {
   display:flex;
@@ -366,7 +355,7 @@ output {
 
 .score-fields { display:flex; align-items:center; gap:2cqw; }
 #player-name { width:0; min-width:0; flex:1; padding:2.5cqw; border:1px solid #6678a7; border-radius:2cqw; background:#060f29; color:white; font-size:16px; user-select:text; }
-#save-score { flex:0 0 42%; min-height:44px; padding:0; border:0; background:transparent; transition:transform .1s; }
+#save-score { flex:0 0 52%; min-height:48px; padding:0; border:0; background:transparent; transition:transform .1s; }
 #save-score img { display:block; width:100%; height:auto; pointer-events:none; }
 #save-score:active:not(:disabled) { transform:scale(.95); }
 #score-status { min-height:1.3em; margin:1.5cqw 0; color:#e0e8ff; line-height:1.3; }

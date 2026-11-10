@@ -26,7 +26,7 @@ function loop(){
   const nodes=visible.filter(n=>s.elapsed-s.planned.find(e=>e.id===Number(n.dataset.id)).at>=.72);
   if(!seen.has('geometry')&&visible.length){
    seen.add('geometry');const star=visible[0],png=star.firstChild,w=document.querySelector('#game').clientWidth;
-   check('Hitbox 140 %, PNG −15 %',Math.abs(parseFloat(getComputedStyle(star).width)/w-.154)<.001&&Math.abs(parseFloat(getComputedStyle(png).width)/parseFloat(getComputedStyle(star).width)-.875*.85/1.4)<.002);
+   check('Hitbox 161 %, PNG −15 %',Math.abs(parseFloat(getComputedStyle(star).width)/w-.1771)<.001&&Math.abs(parseFloat(getComputedStyle(png).width)/parseFloat(getComputedStyle(star).width)-.875*.85/1.61)<.002);
    check('Traînée légèrement allongée',Math.abs(parseFloat(getComputedStyle(star,'::before').height)/w-.42)<.001&&getComputedStyle(star,'::before').opacity==='0.58');
    check('Compteurs −25 %',Math.abs(document.querySelector('#wishes').offsetWidth/w-.24)<.003&&Math.abs(document.querySelector('#best').offsetWidth/w-.21)<.003);
   }
@@ -46,7 +46,12 @@ function loop(){
   check(`Partie ${round} : score figé`,s.score===freezeScore);check('Score final affiché',Number(document.querySelector('#final-score').textContent)===s.score);
   const beeps=sounds.filter(x=>x.name==='countdown-beep');check(`Partie ${round} : trois bips`,beeps.length===round*3);const b=beeps.slice(-3);check('Espacement des bips ≈ 1 s',b.length===3&&b.slice(1).every((v,i)=>Math.abs(v.at-b[i].at-1000)<100));check('GO une seule fois',sounds.filter(x=>x.name==='countown-go').length===round);check('Bonus audio superposé',sounds.some((v,i)=>v.name==='combo-bonus'&&v.at-sounds[i-1].at<20));
   check('Record conditionnel',document.querySelector('#record').hidden===(s.score<=startingBest));
-  if(round===1){firstScore=s.score;firstBest=s.best;previousState='checked-result';document.querySelector('#replay').click();requestAnimationFrame(loop);return;}
+  if(round===1){firstScore=s.score;firstBest=s.best;previousState='checked-result';document.querySelector('#replay').click();
+   const home=window.kimiGame.snapshot();
+   check('Replay revient à START sans compte à rebours',home.state==='ready'&&home.score===0&&home.active===0&&!home.combo&&home.elapsed===0&&!document.querySelector('#start-screen').hidden&&document.querySelector('#countdown').hidden);
+   check('Replay remet la vidéo en pause',document.querySelector('video').paused);
+   setTimeout(()=>document.querySelector('#start').click(),300);
+   requestAnimationFrame(loop);return;}
   check('Aucune erreur JavaScript',errors.length===0);document.querySelector('#next').click();
   setTimeout(()=>{
    check('Résultat d’intégration complet',completionCallback?.score===s.score&&completionCallback?.best===s.best&&completionCallback?.attempts===2&&completionCallback?.replays===1&&completionEvent?.attempts===2);
