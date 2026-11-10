@@ -41,12 +41,12 @@ function comboBreak(){audio.play('combo-break');$('combo').className='leave';eff
 function reset(){
  $('red-flash').classList.remove('hit');lastRedFlash=-Infinity;
  resetLeaderboard();
- run++;audio.stop();active.clear();effects=[];$('playfield').replaceChildren();score=new Score();timeline=createTimeline();cursor=0;hurry=false;lastCount=-1;recordShown=false;priorBest=best;newRecord=false;
+ audio.stop();active.clear();effects=[];$('playfield').replaceChildren();score=new Score();timeline=createTimeline();cursor=0;hurry=false;lastCount=-1;recordShown=false;priorBest=best;newRecord=false;
  for(const id of ['end-screen','record','announcement','countdown','combo','resume'])$(id).hidden=true;
  $('combo').className='';$('timer').classList.remove('urgent');$('time-fill').style.transform='scaleX(1)';$('next-message').textContent='';syncScore();
 }
 async function start(sound){
- reset();state='starting';$('game').dataset.scene='start';$('start-screen').hidden=false;$('loading').textContent='Loading the stars…';
+ reset();run++;state='starting';$('game').dataset.scene='start';$('start-screen').hidden=false;$('loading').textContent='Loading the stars…';
  // Both media activation calls originate in the button gesture, before awaiting anything.
  stopPreview();optional(()=>audio.unlock());seekVideo(video,0);video.muted=audio.muted;
  const ready=waitForPlayback(video);
@@ -58,7 +58,17 @@ async function start(sound){
  beginLeaderboardRun();audio.play(sound);epoch=performance.now();goAt=epoch+3000;state='countdown';$('start-screen').hidden=true;$('veil').classList.add('clear');$('hud').hidden=false;$('timer').hidden=false;$('sound').hidden=false;
 }
 bindButton('start','start-game-normal','start-game-pressed','button-start',start);
-bindButton('replay','replay-normal','replay-pressed','button-replay',start);
+function returnToStart(sound){
+ reset();state='ready';epoch=goAt=endAt=0;
+ video.pause();seekVideo(video,0);
+ $('game').dataset.scene='start';$('start-screen').hidden=false;
+ $('veil').classList.remove('clear');
+ for(const id of ['hud','timer','sound'])$(id).hidden=true;
+ $('timer').setAttribute('aria-valuenow',String(C.GAME_DURATION));
+ $('loading').textContent='';$('start').disabled=false;
+ optional(()=>audio.unlock());audio.play(sound);
+}
+bindButton('replay','replay-normal','replay-pressed','button-replay',returnToStart);
 bindButton('next','continue-normal','continue-pressed','button-continue',async sound=>{await audio.unlock();audio.play(sound);onNext();});
 export function onNext(){
  // Set NEXT_URL in config.js, or listen for this event in the host project.
@@ -91,7 +101,7 @@ $('playfield').addEventListener('pointerdown',event=>{
 });
 function announce(kind){$('announcement').replaceChildren(art(kind==='hurry'?'hurry-up':'time-up'));$('announcement').className='';$('announcement').setAttribute('aria-label',kind==='hurry'?'HURRY UP!':'TIME UP!');$('announcement').hidden=false;}
 function finish(){state='ending';endAt=goAt+C.GAME_DURATION*1000;for(const item of active.values())item.node.remove();active.clear();$('countdown').hidden=true;$('time-fill').style.transform='scaleX(0)';announce('time');audio.play('time-up');newRecord=score.value>priorBest;if(newRecord){best=score.value;try{localStorage.setItem(STORAGE_KEY,String(best));}catch{}}}
-function showResult(){state='result';$('game').dataset.scene='result';$('hud').hidden=true;$('timer').hidden=true;$('announcement').hidden=true;$('final-score').textContent=score.value;$('end-best-value').textContent=best;$('end-screen').hidden=false;audio.play('end-screen');showLeaderboard(score.value);}
+function showResult(){state='result';$('game').dataset.scene='result';$('hud').hidden=true;$('timer').hidden=true;$('announcement').hidden=true;$('final-score').textContent=score.value;$('end-screen').hidden=false;audio.play('end-screen');showLeaderboard(score.value);}
 function tick(now){
  effects=effects.filter(e=>{if(now>=e.until){e.done();return false;}return true;});
  if(state==='countdown'){
