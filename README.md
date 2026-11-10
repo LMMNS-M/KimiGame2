@@ -1,13 +1,13 @@
 # Kimi · Shooting Wishes
 
-Jeu tactile portrait 9:16 : attraper les étoiles blanches et dorées, éviter les rouges pendant 60 secondes. Trois captures positives activent le combo x2. Le score ne descend jamais sous zéro. À la fin : résultat, record personnel, classement partagé des 10 meilleures parties et Replay. Aucune suite n'est proposée.
+Jeu tactile portrait 9:16 : attraper les étoiles blanches et dorées, éviter les rouges pendant 60 secondes. Trois captures positives activent le combo x2. Le score ne descend jamais sous zéro. À la fin : résultat, record personnel, classement partagé des 5 meilleures parties et Replay. Aucune suite n'est proposée. Attraper une étoile rouge déclenche un léger filtre rouge translucide de 320 ms (16 % d'opacité maximale, 8 % si les animations réduites sont demandées).
 
 ## Architecture
 
 - **GitHub Pages** héberge le HTML, le JavaScript, les images, les sons et la vidéo.
 - **Ubuntu** héberge l'API Flask/Gunicorn et la base SQLite. Aucun compte Supabase ni service de stockage externe n'est utilisé.
 - `js/server-config.js` choisit l'API HTTPS pour GitHub Pages ; en local, le jeu utilise le serveur qui sert la page.
-- Le classement est partagé entre tous les joueurs. Chaque partie peut être enregistrée avec un pseudo public de 1 à 20 caractères. Plusieurs parties d'un même pseudo peuvent figurer au classement. Les égalités sont départagées par l'ordre d'enregistrement.
+- Le classement est partagé entre tous les joueurs. Chaque partie peut être enregistrée avec un pseudo public de 1 à 20 caractères. Le visuel TOP 5 affiche les cinq premières parties ; l'API conserve son top 10 et aucun score n'est supprimé. Plusieurs parties d'un même pseudo peuvent figurer au classement. Les égalités sont départagées par l'ordre d'enregistrement.
 - Le record personnel et le dernier pseudo restent dans le navigateur ; les scores partagés sont exclusivement dans SQLite.
 
 ## Lancer localement
@@ -136,7 +136,7 @@ La sauvegarde SQLite cohérente est créée dans `~/.local/share/kimi-game/backu
 ## Fichiers principaux
 
 - `js/config.js`, `js/timeline.js` : rythme et règles de score.
-- `js/assets.js` : chemins des 18 images, 19 sons et de la vidéo.
+- `js/assets.js` : chemins des 19 images, 19 sons et de la vidéo.
 - `js/audio.js`, `js/loading.js` : médias et démarrage compatible iPhone.
 - `js/game.js` : boucle de jeu, affichage, replay.
 - `js/leaderboard.js`, `js/server-config.js` : formulaire et API du classement.

@@ -1,4 +1,10 @@
 export const IMAGES = {
+  "top5-score": {
+    "src": "assets/images/screens/top5-score.png",
+    "width": 1536,
+    "height": 1024,
+    "box": [20, 5, 1514, 996]
+  },
   "time-up": {
     "src": "assets/images/hud/time-up.png",
     "width": 968,
