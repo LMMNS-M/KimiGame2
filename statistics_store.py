@@ -210,6 +210,7 @@ def snapshot(db, filters=None):
         named_games=sum(bool(g['name']) for g in games.values()))
     funnel = Counter(e['kind'] for e in events)
     scores = [dict(r) for r in db.execute('SELECT id,name,score,created FROM scores ORDER BY score DESC,id')]
+    summary['named_scores'] = sum(bool(row['name']) for row in scores)
     geography = Counter((v['country'],v['region'],v['city']) for v in visits.values())
     return dict(Summary=[dict(metric=k,value=v) for k,v in summary.items()],
         Funnel=[dict(event=k,count=funnel[k]) for k in ['page_view','game_start','hurry_up','game_complete','score_qualified','score_saved']],
