@@ -38,6 +38,7 @@ try{
     const browser=await (engine==='chrome'?chromium.launch({executablePath:'/usr/bin/google-chrome'}):webkit.launch());
     browsers.push(browser);
     const context=await browser.newContext({...devices['iPhone 13']});
+    await context.addInitScript(()=>localStorage.setItem('kimi-statistics-v1',JSON.stringify({allow:false})));
     const page=await context.newPage();
     await page.goto(url);await page.waitForFunction(()=>window.kimiGame?.snapshot().state==='ready');
     const baseline=(await rows()).length;
@@ -48,50 +49,35 @@ try{
     assert((await page.locator('#leaderboard-rows').textContent()).includes('—'));
     const owned=(await rows()).find(r=>r.name==='');
     assert(owned);assert.equal((await rows()).length,baseline+1);
-    // Reload before typing a name: restore the private token and the same anonymous row.
+    // Reload must show START, while the owned anonymous row remains recoverable separately.
     await page.reload();
-    await page.waitForFunction(()=>window.kimiGame?.snapshot().state==='result');
-    await page.waitForFunction(()=>document.querySelector('#score-status').textContent.includes('saved as —'));
-    assert(await page.locator('#replay').isDisabled());
-    assert.equal((await rows()).find(r=>r.name==='').id,owned.id);
-    // A fresh browser session does not acquire the pending score.
+    await page.waitForFunction(()=>window.kimiGame?.snapshot().state==='ready');
+    assert(await page.locator('#start').isVisible());
+    assert(await page.locator('#end-screen').isHidden());
+    assert(await page.locator('#replay').isEnabled());
+    assert.equal((await rows()).find(r=>r.id===owned.id).name,'');
     const stranger=await browser.newContext({...devices['iPhone 13']});
+    await stranger.addInitScript(()=>localStorage.setItem('kimi-statistics-v1',JSON.stringify({allow:false})));
     const other=await stranger.newPage();await other.goto(url);
     await other.waitForFunction(()=>window.kimiGame?.snapshot().state==='ready');
-    assert(await other.locator('#end-screen').isHidden());
-    await stranger.close();
-    // Network failure on name submission must not unlock REPLAY or claim success.
-    await page.route('**/api/scores',r=>r.abort());
-    await page.locator('#player-name').fill(engine+' player');
-    await page.locator('#save-score').tap();
-    await page.waitForFunction(()=>document.querySelector('#score-status').textContent.includes('not confirmed'));
-    assert(await page.locator('#replay').isDisabled());
-    assert.equal((await rows()).find(r=>r.id===owned.id).name,'');
-    await page.unroute('**/api/scores');
-    // Server commits the name but its response is lost. Retry must recover that same row.
-    await page.route('**/api/scores',async route=>{await route.fetch();await route.abort();});
-    await page.locator('#save-score').tap();
-    await page.waitForFunction(()=>document.querySelector('#score-status').textContent.includes('not confirmed'));
-    assert(await page.locator('#replay').isDisabled());
-    assert.equal((await rows()).find(r=>r.id===owned.id).name,engine+' player');
-    await page.unroute('**/api/scores');
-    await page.reload();await saved(page);
-    assert(await page.locator('#replay').isEnabled());
+    assert(await other.locator('#pending-open').isHidden());await stranger.close();
+    await page.locator('#pending-open').click();
+    await page.locator('#pending-list input').first().fill(engine+' recovered');
+    await page.locator('#pending-list button').first().click();
+    await page.waitForFunction(()=>document.querySelector('#pending-open').hidden);
+    await page.locator('#pending-close').click();
+    assert.equal((await rows()).find(r=>r.id===owned.id).name,engine+' recovered');
     assert.equal((await rows()).length,baseline+1);
-    assert.equal(await page.evaluate(()=>localStorage.getItem('kimi-pending-score-v1')),null);
-    // Offline automatic save remains pending; reload and retry persist exactly once.
+    // Automatic save fails; no false success, no permanent Replay lock. Reload retries once.
     await page.route('**/api/scores',r=>r.abort());
     await finish(page,164);
     await page.waitForFunction(()=>document.querySelector('#score-status').textContent.includes('not confirmed'));
-    assert(await page.locator('#replay').isDisabled());
-    assert.equal((await rows()).length,baseline+1);
-    await page.unroute('**/api/scores');
-    await page.reload();
-    await page.waitForFunction(()=>document.querySelector('#score-status').textContent.includes('saved as —'));
-    assert.equal((await rows()).length,baseline+2);
-    await page.locator('#player-name').fill(engine+' recovered');
-    await page.locator('#save-score').tap();await saved(page);
     assert(await page.locator('#replay').isEnabled());
+    await page.unroute('**/api/scores');await page.reload();
+    await page.waitForFunction(()=>window.kimiGame?.snapshot().state==='ready');
+    for(let i=0;i<50&&(await rows()).length!==baseline+2;i++)await delay(100);
+    assert.equal((await rows()).length,baseline+2);
+    assert(await page.locator('#start').isVisible());
     // Server confirmation, not the click, controls unlocking.
     await finish(page,165);
     await page.waitForFunction(()=>document.querySelector('#score-status').textContent.includes('saved as —'));
@@ -107,6 +93,7 @@ try{
   }
   // Fill TOP 5 and check a non-qualifying result leaves REPLAY available.
   const browser=browsers[0], page=await browser.newPage();
+  await page.addInitScript(()=>localStorage.setItem('kimi-statistics-v1',JSON.stringify({allow:false})));
   await page.goto(url);await page.waitForFunction(()=>window.kimiGame?.snapshot().state==='ready');
   const before=(await rows()).length;
   await finish(page,0);

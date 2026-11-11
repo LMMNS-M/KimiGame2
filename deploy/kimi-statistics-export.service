@@ -1,0 +1,12 @@
+[Unit]
+Description=Kimi statistics dirty check and atomic Excel export
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/Documents/KimiGame2
+Environment=KIMI_DATABASE=%h/.local/share/kimi-game/scores.sqlite3
+ExecStart=%h/Documents/KimiGame2/.venv/bin/python scripts/export_statistics.py
+UMask=0077
+NoNewPrivileges=true
+Nice=10
+TimeoutStartSec=240
