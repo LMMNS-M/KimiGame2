@@ -33,7 +33,8 @@ try {
     (async () => {
       const page = await chrome.newPage({viewport: {width: 390, height: 844}, hasTouch: true});
       const errors = []; page.on('pageerror', e => errors.push(String(e)));
-      await page.goto(`${url}/?test`);
+      await page.addInitScript(()=>localStorage.setItem('kimi-statistics-v1',JSON.stringify({allow:false})));
+  await page.goto(`${url}/?test`);
       await page.waitForFunction(() => window.kimiGame?.snapshot().state === 'ready');
       await page.locator('#start').click();
       await page.waitForFunction(() => document.querySelector('#background').videoWidth > 0);
@@ -46,7 +47,8 @@ try {
     (async () => {
       const page = await safari.newPage({...devices['iPhone 13']});
       const errors = []; page.on('pageerror', e => errors.push(String(e)));
-      await page.goto(url);
+      await page.addInitScript(()=>localStorage.setItem('kimi-statistics-v1',JSON.stringify({allow:false})));
+  await page.goto(url);
       await page.waitForFunction(() => window.kimiGame?.snapshot().state === 'ready');
       await page.locator('#start').tap();
       await page.waitForFunction(() => document.querySelector('video').videoWidth === 1080);
@@ -99,6 +101,7 @@ try {
         HTMLMediaElement.prototype.play = function () { return new Promise(() => {}); };
         window.AudioContext = undefined; window.webkitAudioContext = undefined;
       });
+      await fallback.addInitScript(()=>localStorage.setItem('kimi-statistics-v1',JSON.stringify({allow:false})));
       await fallback.goto(url);
       await fallback.waitForFunction(() => window.kimiGame?.snapshot().state === 'ready', {}, {timeout: 10000});
       await fallback.locator('#start').tap();
