@@ -80,6 +80,68 @@ class LeaderboardTests(unittest.TestCase):
         self.assertEqual(self.client.post('/api/scores', json=['bad']).status_code, 400)
         self.assertEqual(self.client.post('/api/runs', data='x' * 3000, content_type='application/json').status_code, 413)
 
+    def anonymous(self, score=100, token=None):
+        return self.client.post('/api/scores', json={'token': token or self.token(), 'score': score})
+
+    def test_anonymous_persists_and_owner_completes_same_entry(self):
+        token = self.token()
+        entry = self.anonymous(100, token).json['entry']
+        self.assertEqual(entry['name'], '')
+        self.assertEqual(self.anonymous(100, token).json['entry']['id'], entry['id'])
+        # A fresh application instance and an expired runs table cannot erase a saved score.
+        with sqlite3.connect(self.database) as db:
+            db.execute('DELETE FROM runs')
+        client = create_app({'TESTING': True, 'DATABASE': self.database}).test_client()
+        self.assertEqual(client.get('/api/leaderboard').json['leaderboard'][0]['name'], '')
+        named = client.post('/api/scores', json={'token': token, 'score': 100, 'name': 'Owner'})
+        self.assertEqual(named.status_code, 200)
+        self.assertEqual(named.json['entry']['id'], entry['id'])
+        self.assertEqual(named.json['entry']['name'], 'Owner')
+        self.assertEqual(self.anonymous(100, token).json['entry']['name'], 'Owner')
+        self.assertEqual(len(client.get('/api/leaderboard').json['leaderboard']), 1)
+        self.assertEqual(self.submit(101, 'Owner', token).status_code, 409)
+        self.assertEqual(self.submit(100, 'Someone else', token).status_code, 409)
+
+    def test_anonymous_qualification_and_ties(self):
+        for score in [150, 140, 130, 120, 110]:
+            self.submit(score)
+        for score in [109, 110]:
+            response = self.anonymous(score).json
+            self.assertIsNone(response['entry'])
+            self.assertFalse(response['qualified'])
+        self.assertEqual(len(self.client.get('/api/leaderboard').json['leaderboard']), 5)
+        self.assertEqual(self.anonymous(111).json['entry']['rank'], 5)
+
+    def test_other_session_cannot_claim_anonymous_row(self):
+        owner = self.token()
+        original = self.anonymous(100, owner).json['entry']
+        bad = self.client.post('/api/scores', json={
+            'id': original['id'], 'token': 'x' * 32, 'score': 100, 'name': 'Intruder'})
+        self.assertEqual(bad.status_code, 410)
+        # Even a valid token from a different run cannot target the original row by its ID.
+        other = self.token()
+        self.client.post('/api/scores', json={
+            'id': original['id'], 'token': other, 'score': 100, 'name': 'Other player'})
+        entries = self.client.get('/api/leaderboard').json['leaderboard']
+        self.assertEqual(entries[0]['id'], original['id'])
+        self.assertEqual(entries[0]['name'], '')
+        self.assertNotIn('token', str(entries))
+        self.assertEqual(self.submit(100, 'Owner', owner).json['entry']['id'], original['id'])
+
+    def test_concurrent_anonymous_and_name_retries_never_duplicate(self):
+        token = self.token()
+        def post(index):
+            with self.app.test_client() as client:
+                body = {'token': token, 'score': 100}
+                if index % 2:
+                    body['name'] = 'Owner'
+                return client.post('/api/scores', json=body).status_code
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            self.assertEqual(list(pool.map(post, range(12))), [200] * 12)
+        entries = self.client.get('/api/leaderboard').json['leaderboard']
+        self.assertEqual(len(entries), 1)
+        self.assertEqual(entries[0]['name'], 'Owner')
+
     def test_video_range_and_health(self):
         response = self.client.get('/assets/video/stars-game-background.mp4', headers={'Range': 'bytes=0-15'})
         self.assertEqual(response.status_code, 206)
