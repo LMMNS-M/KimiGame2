@@ -18,6 +18,7 @@ function savePending() { try {localStorage.setItem(PENDING_KEY, JSON.stringify(p
 let generation = 0, refreshVersion = 0, tokenPromise = Promise.resolve(null);
 let finalScore = null, token = null, saved = false, busy = false, replayLocked = false;
 let qualified = null, currentEntry = null;
+let persistTimer, persistAttempts = 0;
 
 async function api(path, body) {
   const controller = new AbortController();
@@ -126,6 +127,7 @@ $('pending-close')?.addEventListener('click',()=>$('pending-dialog').close());
 setTimeout(syncPending,0);
 
 export function resetLeaderboard() {
+  clearTimeout(persistTimer); persistAttempts = 0;
   generation++; refreshVersion++;
   finalScore = null; token = null; saved = false; busy = false; replayLocked = false;
   qualified = null; currentEntry = null; tokenPromise = Promise.resolve(null);
@@ -172,6 +174,7 @@ async function persist(name) {
     const pendingResult = pending.find(p => p.token === token);
     const data = await submitPending(pendingResult);
     if (current !== generation) return;
+    clearTimeout(persistTimer); persistAttempts = 0;
     refreshVersion++;
     currentEntry = data.entry;
     render(data.leaderboard);
@@ -200,6 +203,10 @@ async function persist(name) {
     } else {
       // A failed service must not trap the player. The capability stays queued.
       replayLocked = false;
+      if (persistAttempts < 8) {
+        clearTimeout(persistTimer);
+        persistTimer = setTimeout(() => {if (current === generation) persist();}, Math.min(300000,2000*2**persistAttempts++));
+      }
     }
   } finally {
     if (current === generation) { busy = false; controls(); }
