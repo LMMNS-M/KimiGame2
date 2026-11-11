@@ -175,15 +175,18 @@ def install(app, connect):
 
     @app.post('/api/statistics/delete')
     def delete_own():
+        if limited('statistics-delete',60): return jsonify(error='Rate limited.'),429
         body = request.get_json()
         if not isinstance(body,dict): return jsonify(error='Invalid request.'),400
         try:
             visitor, secret = stats.identity(body)
             with connect() as db:
                 db.execute('BEGIN IMMEDIATE')
-                if stats.authorize(db, visitor, secret): stats.purge(db,visitor)
-            (private/'statistics.xlsx').unlink(missing_ok=True)
-            launch_export(True)
+                owned = stats.authorize(db, visitor, secret)
+                if owned: stats.purge(db,visitor)
+            if owned:
+                (private/'statistics.xlsx').unlink(missing_ok=True)
+                launch_export(True)
             return jsonify(deleted=True)
         except (ValueError,PermissionError) as error:
             return jsonify(error=str(error)),403

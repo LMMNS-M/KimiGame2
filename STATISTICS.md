@@ -42,7 +42,7 @@ L'export utilise le runtime Node/artifact-tool local installé par Codex, config
 
 Un verrou empêche deux générations simultanées. Le worker prend un instantané cohérent, génère un fichier temporaire privé et compare chaque cellule exportée à la source avant remplacement atomique. Si la base change pendant la génération, le remplacement est reporté. Une erreur conserve le dernier classeur valide. Le tableau de bord affiche la dernière date, l'état en attente et les erreurs.
 
-Onglets : Summary, Funnel, Visitors, Visits, Games, Events, Scores, Locations et Devices. Chaque champ de `stats_events` est exporté, ainsi que toutes les lignes et vues dérivées. Les secrets d'accès et métadonnées d'exploitation ne sont pas des statistiques et ne sont jamais exportés. Les timestamps bruts sont des nombres en secondes Unix UTC, explicitement étiquetés, sans perte de précision. Les identifiants restent du texte et les pseudos ne deviennent jamais des formules Excel.
+Onglets : Summary, Funnel, Visitors, Visits, Games, Events, Scores, Locations, Geography et Devices. Chaque champ de `stats_events` est exporté, ainsi que toutes les lignes et vues dérivées. Les secrets d'accès et métadonnées d'exploitation ne sont pas des statistiques et ne sont jamais exportés. Les timestamps bruts sont des nombres en secondes Unix UTC, explicitement étiquetés, sans perte de précision, avec des colonnes UTC lisibles supplémentaires au format date Excel. Les identifiants restent du texte et les pseudos ne deviennent jamais des formules Excel.
 
 Installation du timer :
 
