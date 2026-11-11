@@ -138,13 +138,14 @@ def create_app(config=None):
         body = request.get_json()
         if not isinstance(body, dict):
             return fail('Invalid result.', 400)
-        token, name, score = body.get('token'), body.get('name'), body.get('score')
+        anonymous = 'name' not in body
+        token, name, score = body.get('token'), body.get('name', ''), body.get('score')
         if not isinstance(token, str) or not 20 <= len(token) <= 100:
             return fail('Unknown game. Start a new game.', 400)
         if not isinstance(name, str):
             return fail('Choose a nickname between 1 and 20 characters.', 400)
         name = unicodedata.normalize('NFC', name).strip()
-        if not 1 <= len(name) <= 20 or any(unicodedata.category(c).startswith('C') for c in name):
+        if (not anonymous and not 1 <= len(name) <= 20) or any(unicodedata.category(c).startswith('C') for c in name):
             return fail('Choose a nickname between 1 and 20 characters, without control characters.', 400)
         if type(score) is not int or not 0 <= score <= 165:
             return fail('Invalid score.', 400)
@@ -153,14 +154,27 @@ def create_app(config=None):
             db.execute('BEGIN IMMEDIATE')
             existing = db.execute('SELECT id, name, score FROM scores WHERE token_hash = ?', (token_hash,)).fetchone()
             if existing:
-                if existing['name'] == name and existing['score'] == score:
+                if existing['score'] != score:
+                    return fail('This game has already been saved.', 409)
+                # The secret run token owns this row; public row IDs never authorize a rename.
+                # An anonymous retry is also a safe way to recover after a lost response.
+                if anonymous or existing['name'] == name:
                     return saved_result(db, existing)
+                if existing['name'] == '':
+                    db.execute('UPDATE scores SET name = ? WHERE id = ?', (name, existing['id']))
+                    row = db.execute('SELECT id, name, score FROM scores WHERE id = ?', (existing['id'],)).fetchone()
+                    return saved_result(db, row)
                 return fail('This game has already been saved.', 409)
             run = db.execute('SELECT started FROM runs WHERE token_hash = ?', (token_hash,)).fetchone()
             if not run or time.time() - run['started'] > app.config['RUN_TTL']:
                 return fail('Game expired. Play again to save a score.', 410)
             if time.time() - run['started'] < app.config['MIN_RUN_SECONDS']:
                 return fail('The game has not finished yet.', 409)
+            if anonymous:
+                # Same ordering as the public leaderboard: earlier entries win ties.
+                ahead = db.execute('SELECT COUNT(*) FROM scores WHERE score >= ?', (score,)).fetchone()[0]
+                if ahead >= 5:
+                    return jsonify(entry=None, qualified=False, leaderboard=leaders(db))
             cursor = db.execute('INSERT INTO scores (token_hash, name, score, created) VALUES (?, ?, ?, ?)',
                                 (token_hash, name, score, time.time()))
             row = db.execute('SELECT id, name, score FROM scores WHERE id = ?', (cursor.lastrowid,)).fetchone()

@@ -9,6 +9,9 @@ Jeu tactile portrait 9:16 : attraper les étoiles blanches et dorées, éviter l
 - `js/server-config.js` choisit l'API HTTPS pour GitHub Pages ; en local, le jeu utilise le serveur qui sert la page.
 - Le classement est partagé entre tous les joueurs. Chaque partie peut être enregistrée avec un pseudo public de 1 à 20 caractères. Le visuel TOP 5 affiche les cinq premières parties ; l'API conserve son top 10 et aucun score n'est supprimé. Plusieurs parties d'un même pseudo peuvent figurer au classement. Les égalités sont départagées par l'ordre d'enregistrement.
 - Le record personnel et le dernier pseudo restent dans le navigateur ; les scores partagés sont exclusivement dans SQLite.
+- À la fin, le serveur vérifie le TOP 5 et enregistre automatiquement les scores qualifiés sans nom (affichés « — »). REPLAY reste désactivé jusqu'à confirmation du pseudo. Le jeton secret de la partie permet une seule attribution de nom sur la même ligne ; les identifiants publics ne permettent aucune attribution.
+- Un identifiant de récupération local conserve le jeton et le score en attente pour reprendre après rechargement. L'entrée confirmée reste dans SQLite même sans pseudo ou après expiration de la partie. Une requête hors ligne ne peut pas atteindre le serveur : elle est réessayée au retour réseau, avec ↻ ou au rechargement. Une partie non encore reçue expire après une heure, comme auparavant. Supprimer le stockage local fait perdre la possibilité de nommer une entrée anonyme, sans effacer cette entrée.
+- REPLAY revient à START et attend un nouvel appui sur START GAME. Les tests de récupération utilisent une base temporaire et ne modifient pas les scores des joueurs.
 
 ## Lancer localement
 
@@ -105,6 +108,7 @@ Les tests WebKit avec profil iPhone complètent les tests Chrome ; ils ne rempla
 ```bash
 npm test
 npm run test:server
+npm run test:leaderboard
 ```
 
 Tests de navigateur facultatifs (deux parties réelles, environ 2 min 15) :
@@ -115,7 +119,7 @@ npx playwright install --with-deps webkit
 npm run test:browser
 ```
 
-Le test utilise Chrome installé dans `/usr/bin/google-chrome` (ou `CHROME_BIN`) et WebKit, crée une base temporaire séparée et la supprime après vérification. Il couvre la vidéo, le jeu, l'enregistrement, le replay et le démarrage sans médias. Les captures de résultat sont écrites dans `/tmp/kimi-iphone-result.png`.
+Le test utilise Chrome installé dans `/usr/bin/google-chrome` (ou `CHROME_BIN`) et WebKit, crée une base temporaire séparée et la supprime après vérification. Il couvre la vidéo, le jeu, l'enregistrement, le replay et le retour à START et le maintien à l'accueil si la vidéo est indisponible. Les captures de résultat sont écrites dans `/tmp/kimi-iphone-result.png`.
 
 Le scénario `/?test` joue automatiquement deux parties après START, sans appeler l'API ni publier de scores. `window.kimiGame.snapshot()` expose un diagnostic en lecture seule.
 
