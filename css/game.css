@@ -450,3 +450,5 @@ output {
 #game[data-scene="start"] #still-background { background-image:url('../assets/images/backgrounds/start.webp'); }
 #game[data-scene="result"] #still-background { background-image:url('../assets/images/backgrounds/result.webp'); }
 #game[data-scene="playing"] #still-background { visibility:hidden; }
+
+#replay:disabled { filter:grayscale(1); cursor:default; }
