@@ -32,5 +32,9 @@
 <div class="end-buttons"><button id="replay" class="image-button" aria-label="Replay"></button><button id="next" class="image-button" aria-label="Next" hidden></button></div><p id="next-message" role="status" hidden></p>
 </div></section>
 <button id="resume" hidden>Tap to resume ♪</button>
-</main><script type="module" src="js/game.js"></script>
+</main>
+<div id="preferences"><button id="privacy-open">Privacy</button><button id="pending-open" hidden>Pending scores</button></div>
+<dialog id="pending-dialog" class="settings-panel"><h2>Pending scores</h2><p>Only this browser can name these scores. Starting a new game does not erase them.</p><div id="pending-list"></div><button id="pending-close">Close</button></dialog>
+<dialog id="privacy-dialog" class="settings-panel"><h2>Optional statistics</h2><p>Allow this Ubuntu server to remember this browser and collect visits, game progress, scores, names you submit, and basic device details? Statistics are kept for 90 days. No advertising, GPS or fingerprinting.</p><p>The public leaderboard and local score recovery work without statistics. Public scores are stored separately.</p><label><input id="privacy-geo" type="checkbox"> Also allow approximate country, region and city from the connection's IP address, when available. The IP is not stored in statistics.</label><div class="privacy-actions"><button id="privacy-allow">Allow statistics</button><button id="privacy-refuse">No statistics</button><button id="privacy-delete">Delete my statistics</button><button id="privacy-close">Close</button></div><p id="privacy-status" role="status"></p></dialog>
+<script type="module" src="js/game.js"></script>
 <script type="module">if(new URLSearchParams(location.search).has("test")) import("./tests/browser-check.js");</script></body></html>

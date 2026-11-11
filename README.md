@@ -8,14 +8,14 @@ Jeu tactile portrait 9:16 : attraper les étoiles blanches et dorées, éviter l
 - **Ubuntu** héberge l'API Flask/Gunicorn et la base SQLite. Aucun compte Supabase ni service de stockage externe n'est utilisé.
 - `js/server-config.js` choisit l'API HTTPS pour GitHub Pages ; en local, le jeu utilise le serveur qui sert la page.
 - Le classement est partagé entre tous les joueurs. Chaque partie peut être enregistrée avec un pseudo public de 1 à 20 caractères. Le visuel TOP 5 affiche les cinq premières parties ; l'API conserve son top 10 et aucun score n'est supprimé. Plusieurs parties d'un même pseudo peuvent figurer au classement. Les égalités sont départagées par l'ordre d'enregistrement.
-- Le record personnel et le dernier pseudo restent dans le navigateur ; les scores partagés sont exclusivement dans SQLite.
+- Le record personnel reste dans le navigateur ; les scores partagés sont exclusivement dans SQLite.
 - À la fin, le serveur vérifie le TOP 5 et enregistre automatiquement les scores qualifiés sans nom (affichés « — »). REPLAY reste désactivé jusqu'à confirmation du pseudo. Le jeton secret de la partie permet une seule attribution de nom sur la même ligne ; les identifiants publics ne permettent aucune attribution.
-- Un identifiant de récupération local conserve le jeton et le score en attente pour reprendre après rechargement. L'entrée confirmée reste dans SQLite même sans pseudo ou après expiration de la partie. Une requête hors ligne ne peut pas atteindre le serveur : elle est réessayée au retour réseau, avec ↻ ou au rechargement. Une partie non encore reçue expire après une heure, comme auparavant. Supprimer le stockage local fait perdre la possibilité de nommer une entrée anonyme, sans effacer cette entrée.
+- Un identifiant de récupération local conserve le jeton et le score en attente pour reprendre après rechargement. L'entrée confirmée reste dans SQLite même sans pseudo ou après expiration de la partie. Une requête hors ligne ne peut pas atteindre le serveur : elle est réessayée au retour réseau, avec ↻ ou au rechargement. Les parties non transmises peuvent être synchronisées pendant 7 jours. Supprimer le stockage local fait perdre la possibilité de nommer une entrée anonyme, sans effacer cette entrée.
 - REPLAY revient à START et attend un nouvel appui sur START GAME. Les tests de récupération utilisent une base temporaire et ne modifient pas les scores des joueurs.
 
 ## Lancer localement
 
-Python 3.12 et son module venv sont nécessaires. Node.js 22 sert aux tests, pas au serveur.
+Python 3.12 et son module venv sont nécessaires. Node.js 22 sert aux tests. Le worker Excel utilise séparément le runtime local décrit dans STATISTICS.md.
 
 ```bash
 python3.12 -m venv .venv
@@ -63,7 +63,7 @@ Si Tailscale demande d'autoriser Funnel dans son administration, suivre cette é
 curl https://lammens-cloud.tail538586.ts.net/api/health
 ```
 
-Résultat attendu : `{"status":"ok"}`. Tant que cette URL n'est pas accessible, la publication des scores depuis GitHub Pages ne fonctionne pas. La machine Ubuntu doit rester allumée et connectée. Le jeu reste jouable si l'API est indisponible, mais une partie sans connexion initiale ne peut pas être publiée au classement.
+Résultat attendu : `{"status":"ok"}`. Tant que cette URL n'est pas accessible, la publication des scores depuis GitHub Pages ne fonctionne pas. La machine Ubuntu doit rester allumée et connectée. Le jeu reste jouable si l'API est indisponible ; les scores en attente peuvent être synchronisés ultérieurement.
 
 Pour un domaine personnel, `deploy/Caddyfile.example` fournit une alternative. Modifier alors l'URL dans `js/server-config.js`. Si l'origine de la page change, adapter `KIMI_ALLOWED_ORIGINS` dans le service. Aucune clé secrète n'est placée dans le navigateur.
 
@@ -146,3 +146,7 @@ La sauvegarde SQLite cohérente est créée dans `~/.local/share/kimi-game/backu
 - `js/leaderboard.js`, `js/server-config.js` : formulaire et API du classement.
 - `server.py` : API, validation et stockage SQLite.
 - `deploy/` : service Ubuntu et exemple de reverse proxy.
+
+## Statistiques et administration privées
+
+Voir [STATISTICS.md](STATISTICS.md) pour le consentement, la récupération des scores, les statistiques Ubuntu, les accès privés et le mécanisme d’export Excel. Une recharge revient désormais toujours à START.

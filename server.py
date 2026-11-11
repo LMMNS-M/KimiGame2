@@ -117,20 +117,34 @@ def create_app(config=None):
 
     @app.post('/api/runs')
     def begin_run():
-        if not isinstance(request.get_json(), dict):
+        body = request.get_json()
+        if not isinstance(body, dict):
             return fail('Invalid request.', 400)
         now = time.time()
         address = hashlib.sha256(address_salt + (request.remote_addr or '').encode()).hexdigest()
-        token = secrets.token_urlsafe(32)
+        token = body.get('token', secrets.token_urlsafe(32))
+        if not isinstance(token, str) or not 32 <= len(token) <= 100:
+            return fail('Invalid game token.', 400)
+        deferred = body.get('deferred', False)
+        if type(deferred) is not bool:
+            return fail('Invalid deferred game.', 400)
+        if deferred:
+            started, ended = body.get('started'), body.get('ended')
+            if (type(started) not in (int,float) or type(ended) not in (int,float) or
+                not now-7*86400 <= started <= ended <= now+60 or not 60 <= ended-started <= 86400):
+                return fail('Invalid deferred game times.', 400)
+        hashed = hashlib.sha256(token.encode()).hexdigest()
         with connect() as db:
             db.execute('BEGIN IMMEDIATE')
             db.execute('DELETE FROM runs WHERE started < ?', (now - app.config['RUN_TTL'],))
+            if db.execute('SELECT 1 FROM runs WHERE token_hash=? UNION SELECT 1 FROM scores WHERE token_hash=?', (hashed,hashed)).fetchone():
+                return jsonify(token=token)
             count = db.execute('SELECT COUNT(*) FROM runs WHERE address_hash = ? AND started > ?',
                                (address, now - 3600)).fetchone()[0]
             if count >= app.config['RUNS_PER_HOUR']:
                 return fail('Too many games started. Please try again later.', 429)
             db.execute('INSERT INTO runs VALUES (?, ?, ?)',
-                       (hashlib.sha256(token.encode()).hexdigest(), now, address))
+                       (hashed, now-app.config['MIN_RUN_SECONDS'] if deferred else now, address))
         return jsonify(token=token), 201
 
     @app.post('/api/scores')
@@ -200,6 +214,8 @@ def create_app(config=None):
         folder, _, filename = path.partition('/')
         return send_from_directory(ROOT / folder, filename, conditional=True)
 
+    from statistics_admin import install
+    install(app, connect)
     return app
 
 
