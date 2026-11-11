@@ -9,6 +9,31 @@ let preference = read(KEY, null), queue = read(QUEUE, []), visit = uid(), game =
 let busy = false, retries = 0, retryTimer, pageRecorded = false, active = 0, visitActive = 0, lastTick = performance.now();
 let elapsed = 0, score = null, best = null, gameRunning = false, getSnapshot;
 let wasVisible = !document.hidden;
+const categories = ['visits','gameplay','scores','device','geo'];
+if (!disabled) {
+  if (!preference || typeof preference !== 'object') {
+    preference = {allow:true,visits:true,gameplay:true,scores:true,device:true,geo:true,visitor:uid(),secret:uid(),source:'default'};
+  } else {
+    // A previously expressed refusal or location choice is never overwritten.
+    for (const key of categories) if (typeof preference[key] !== 'boolean') preference[key] = key !== 'geo';
+    if (preference.allow) {preference.visitor ||= uid();preference.secret ||= uid();}
+  }
+  write(KEY,preference);
+}
+let activeRequest;
+function filtered(event) {
+  if (!allowed()) return null;
+  const gameEvent = ['game_start','hurry_up','game_complete','game_interrupted','game_abandoned','progress','replay_clicked'].includes(event.kind);
+  const scoreEvent = ['score_qualified','score_saved'].includes(event.kind);
+  if ((gameEvent && !preference.gameplay) || (scoreEvent && !preference.scores) || (!gameEvent && !scoreEvent && !preference.visits)) return null;
+  const e = {...event,geo_consent:!!preference.geo};
+  if (!preference.device) Object.assign(e,{device:'unknown',os:'unknown',browser:'unknown'});
+  if (!preference.scores) Object.assign(e,{score:null,best:null,name:null,score_id:null});
+  if (!preference.gameplay) Object.assign(e,{elapsed:0,active:0});
+  if (!preference.gameplay && !preference.scores) e.game_id = null;
+  if (!preference.visits) e.visit_active = 0;
+  return e;
+}
 const ua = navigator.userAgent;
 const info = {
   device: /iPad/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints>1) ? 'tablet' : /Mobi|iPhone|Android/.test(ua) ? 'smartphone' : 'computer',
@@ -17,8 +42,11 @@ const info = {
 };
 function allowed(){return !disabled && preference?.allow === true;}
 export function scoreContext(){
-  if(!allowed()||!game)return null;
-  return {visitor:preference.visitor,visit_id:visit,game_id:game,elapsed,active,visit_active:visitActive,best,...info};
+  if(!allowed()||!preference.scores||!game)return null;
+  return {visitor:preference.visitor,visit_id:visit,game_id:game,
+    elapsed:preference.gameplay?elapsed:0,active:preference.gameplay?active:0,
+    visit_active:preference.visits?visitActive:0,best,
+    ...(preference.device?info:{device:'unknown',os:'unknown',browser:'unknown'})};
 }
 export function scoreConfirmed(kind,entry,context){
   if(!allowed()||!context||context.visitor!==preference.visitor)return;
@@ -30,16 +58,17 @@ export function scoreConfirmed(kind,entry,context){
 }
 function trimQueue(){
   if (!Array.isArray(queue)) queue=[];
-  queue=queue.filter(item=>item?.event?.occurred>Date.now()/1000-7*86400).slice(-400);
+  queue=queue.filter(item=>item?.event?.occurred>Date.now()/1000-7*86400).map(item=>({...item,event:filtered(item.event)})).filter(item=>item.event).slice(-400);
   write(QUEUE,queue);
 }
 async function send(path, body){
   const controller=new AbortController(), timeout=setTimeout(()=>controller.abort(),3000);
+  if (!path) activeRequest = controller;
   try{
     const response=await fetch(`${API_BASE_URL}/api/statistics${path}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:controller.signal,keepalive:true});
     if(!response.ok){const error=new Error('Not confirmed by the server. Please try again.');error.status=response.status;throw error;}
     return await response.json();
-  }finally{clearTimeout(timeout);}
+  }finally{clearTimeout(timeout);if(activeRequest===controller)activeRequest=null;}
 }
 async function flush(){
   if(!allowed()||busy||retries>=8)return;
@@ -48,10 +77,10 @@ async function flush(){
     while(queue.length && allowed()){
       const item=queue[0];
       try{await send('',item);}catch(error){
-        if([400,403].includes(error.status)){queue.shift();trimQueue();continue;}
+        if([400,403].includes(error.status)){queue=queue.filter(p=>p.event.event_id!==item.event.event_id);trimQueue();continue;}
         throw error;
       }
-      if(queue[0]===item)queue.shift();trimQueue();
+      queue=queue.filter(p=>p.event.event_id!==item.event.event_id);trimQueue();
     }
     retries=0;
   }catch{retryTimer=setTimeout(flush,Math.min(300000,2000*2**retries++));}
@@ -100,8 +129,8 @@ export function gameComplete(value,record){
 function checkpoint(){
   if(!allowed())return;
   track(gameRunning?'progress':'visibility');
-  if(gameRunning){
-    const event={visit_id:visit,game_id:game,elapsed,active,visit_active:visitActive,score,best,visible:!document.hidden,geo_consent:!!preference.geo,...info};
+  if(gameRunning && preference.gameplay){
+    const event=filtered({visit_id:visit,game_id:game,elapsed,active,visit_active:visitActive,score,best,visible:!document.hidden,geo_consent:!!preference.geo,...info,kind:'progress'});
     try{sessionStorage.setItem('kimi-active-game',JSON.stringify({visitor:preference.visitor,running:true,at:Date.now(),event}));}catch{}
   }
 }
@@ -109,20 +138,41 @@ export function initializeStatistics(snapshot){
   getSnapshot=snapshot;
   if(disabled)return;
   trimQueue();pageView();flush();
-  if(!preference)$('privacy-dialog').showModal();
   setInterval(()=>{if(gameRunning||!document.hidden)checkpoint();},10000);
 }
-$('privacy-open').addEventListener('click',()=>{$('privacy-geo').checked=!!preference?.geo;$('privacy-dialog').showModal();});
+function updateControls() {
+  $('privacy-enabled').checked = !!preference?.allow;
+  for (const key of categories) {
+    $('privacy-'+key).checked = !!preference?.[key];
+    $('privacy-'+key).disabled = !preference?.allow;
+  }
+}
+function saveChoices() {
+  activeRequest?.abort();
+  preference = {...preference,allow:$('privacy-enabled').checked,source:'choice',updated_at:Date.now()};
+  for (const key of categories) preference[key] = $('privacy-'+key).checked;
+  if (preference.allow) {preference.visitor ||= uid();preference.secret ||= uid();}
+  write(KEY,preference);trimQueue();clearTimeout(retryTimer);retries=0;
+  if (!preference.allow || !preference.gameplay) {try{sessionStorage.removeItem('kimi-active-game');}catch{}}
+  updateControls();$('privacy-status').textContent='Preferences saved.';
+  pageView();flush();
+}
+$('privacy-open').addEventListener('click',()=>{
+  $('privacy-info').hidden = !$('privacy-info').hidden;
+  $('privacy-open').setAttribute('aria-expanded',String(!$('privacy-info').hidden));
+});
+$('privacy-info').addEventListener('click',()=>{
+  updateControls();$('privacy-info').hidden=true;$('privacy-open').setAttribute('aria-expanded','false');
+  $('privacy-status').textContent='';$('privacy-dialog').showModal();
+});
 $('privacy-close').addEventListener('click',()=>$('privacy-dialog').close());
-$('privacy-allow').addEventListener('click',()=>{
-  preference={allow:true,geo:$('privacy-geo').checked,visitor:preference?.visitor||uid(),secret:preference?.secret||uid(),consented_at:Date.now()};
-  write(KEY,preference);$('privacy-dialog').close();pageView();flush();
+$('privacy-enabled').addEventListener('change',()=>{
+  if ($('privacy-enabled').checked) for (const key of categories) $('privacy-'+key).checked=true;
+  saveChoices();
 });
-$('privacy-refuse').addEventListener('click',()=>{
-  preference={...preference,allow:false,geo:false};write(KEY,preference);queue=[];trimQueue();clearTimeout(retryTimer);$('privacy-dialog').close();
-});
+for (const key of categories) $('privacy-'+key).addEventListener('change',saveChoices);
 $('privacy-delete').addEventListener('click',async()=>{
-  const previous=preference;preference={...preference,allow:false,geo:false};write(KEY,preference);queue=[];trimQueue();clearTimeout(retryTimer);
+  const previous=preference;preference={...preference,allow:false,geo:false};write(KEY,preference);queue=[];trimQueue();clearTimeout(retryTimer);activeRequest?.abort();updateControls();
   if(!previous?.visitor){$('privacy-status').textContent='No statistics identifier is stored.';return;}
   try{while(busy)await new Promise(resolve=>setTimeout(resolve,50));await send('/delete',{visitor_id:previous.visitor,secret:previous.secret});preference={allow:false};write(KEY,preference);$('privacy-status').textContent='Your statistics have been deleted. Public scores are unchanged.';}
   catch{$('privacy-status').textContent='Deletion is not confirmed. Try again when connected.';}
