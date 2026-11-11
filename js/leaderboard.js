@@ -1,61 +1,89 @@
 import {API_BASE_URL} from './server-config.js';
 const $ = id => document.getElementById(id);
 const testing = new URLSearchParams(location.search).has('test');
-let refreshVersion = 0, generation = 0, tokenPromise = Promise.resolve(null), finalScore = null, saved = false;
+const PENDING_KEY = 'kimi-pending-score-v1';
+let generation = 0, refreshVersion = 0, tokenPromise = Promise.resolve(null);
+let finalScore = null, token = null, saved = false, busy = false, replayLocked = false;
+let qualified = null, currentEntry = null;
 
 async function api(path, body) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 10000);
   try {
-  const response = await fetch(`${API_BASE_URL}/api/${path}`, {
-    method: body === undefined ? 'GET' : 'POST',
-    headers: body === undefined ? {} : {'Content-Type': 'application/json'},
-    body: body === undefined ? undefined : JSON.stringify(body),
-    signal: controller.signal,
-  }).catch(() => { throw new Error(controller.signal.aborted ? 'Slow connection. Try again: your score will not be saved twice.' : 'Unable to connect to the leaderboard. Please try again.'); });
-  const data = await response.json().catch(() => { throw new Error('Leaderboard unavailable. Please try again shortly.'); });
-  if (!response.ok) throw new Error(data.error || 'Leaderboard unavailable. Please try again.');
-  return data;
+    const response = await fetch(`${API_BASE_URL}/api/${path}`, {
+      method: body === undefined ? 'GET' : 'POST',
+      headers: body === undefined ? {} : {'Content-Type': 'application/json'},
+      body: body === undefined ? undefined : JSON.stringify(body),
+      signal: controller.signal,
+      keepalive: body !== undefined,
+    }).catch(() => { throw new Error('Connection unavailable. Saving is not confirmed. Tap ↻ to retry.'); });
+    const data = await response.json().catch(() => { throw new Error('Leaderboard unavailable. Please try again.'); });
+    if (!response.ok) {
+      const error = new Error(data.error || 'Leaderboard unavailable. Please try again.');
+      error.status = response.status;
+      throw error;
+    }
+    return data;
   } finally { clearTimeout(timeout); }
 }
 
-function render(entries, selectedId) {
+function render(entries, selectedId = currentEntry?.id) {
   $('leaderboard-rows').replaceChildren();
   $('leaderboard-empty').hidden = entries.length > 0;
   for (let index = 0; index < 5; index++) {
-    const entry = entries[index];
+    const entry = entries[index], displayName = entry ? (entry.name || '—') : '';
     const row = document.createElement('li');
-    row.setAttribute('aria-label', entry ? `${index + 1}. ${entry.name}, ${entry.score} points` : `${index + 1}. Open spot`);
-    if (entry?.id === selectedId && entry) row.className = 'your-score';
+    row.setAttribute('aria-label', entry ? `${index + 1}. ${displayName}, ${entry.score} points` : `${index + 1}. Open spot`);
+    if (entry && entry.id === selectedId) row.className = 'your-score';
     const name = document.createElement('span'), value = document.createElement('span');
     name.className = 'top-name'; value.className = 'top-score';
-    name.textContent = entry?.name || '';
-    name.title = entry?.name || '';
+    name.textContent = displayName; name.title = displayName;
     value.textContent = entry ? String(entry.score) : '';
-    // Cover the dashes baked into the artwork only for occupied places.
     value.hidden = !entry;
-    row.append(name, value);
-    $('leaderboard-rows').append(row);
+    row.append(name, value); $('leaderboard-rows').append(row);
   }
 }
 
+function controls() {
+  $('replay').disabled = replayLocked;
+  $('save-score').disabled = busy || saved || !token;
+  $('player-name').disabled = busy || saved;
+  $('save-score').setAttribute('aria-label', saved ? 'Saved' : 'Save score');
+}
+export function canReplay() { return !replayLocked; }
+
+function remember() {
+  if (testing || !token || finalScore === null) return;
+  try { localStorage.setItem(PENDING_KEY, JSON.stringify({token, score: finalScore})); } catch {}
+}
+function forget() {
+  try {
+    const pending = JSON.parse(localStorage.getItem(PENDING_KEY));
+    if (pending?.token === token) localStorage.removeItem(PENDING_KEY);
+  } catch {}
+}
+export function restorePendingScore() {
+  if (testing) return null;
+  try {
+    const pending = JSON.parse(localStorage.getItem(PENDING_KEY));
+    if (typeof pending?.token !== 'string' || pending.token.length < 20 || pending.token.length > 100 ||
+        !Number.isInteger(pending.score) || pending.score < 0 || pending.score > 165) return null;
+    tokenPromise = Promise.resolve({token: pending.token});
+    return pending.score;
+  } catch { return null; }
+}
+
 export function resetLeaderboard() {
-  generation++;
-  finalScore = null;
-  saved = false;
-  tokenPromise = Promise.resolve(null);
-  $('save-score').disabled = true;
+  generation++; refreshVersion++;
+  finalScore = null; token = null; saved = false; busy = false; replayLocked = false;
+  qualified = null; currentEntry = null; tokenPromise = Promise.resolve(null);
   $('refresh-scores').disabled = false;
-  $('player-name').disabled = false;
-  $('save-score').setAttribute('aria-label', 'Save score');
-  $('score-status').textContent = '';
-  $('leaderboard-status').textContent = '';
-  render([]);
-  $('leaderboard-empty').hidden = true;
+  $('score-status').textContent = ''; $('leaderboard-status').textContent = '';
+  render([]); $('leaderboard-empty').hidden = true;
+  controls();
 }
 
 export function beginLeaderboardRun() {
-  // Failure never prevents a local game; show its cause at the end.
   tokenPromise = testing ? Promise.resolve(null) : api('runs', {}).catch(error => ({error}));
 }
 
@@ -70,50 +98,84 @@ async function refresh() {
     render(data.leaderboard);
     $('leaderboard-status').textContent = testing ? 'Test mode: no scores published.' : '';
   } catch {
-    if (current === generation && request === refreshVersion) $('leaderboard-status').textContent = 'Leaderboard unavailable. Tap ↻ to try again.';
+    if (current === generation && request === refreshVersion)
+      $('leaderboard-status').textContent = 'Leaderboard unavailable. Tap ↻ to retry.';
   } finally {
     if (current === generation) $('refresh-scores').disabled = false;
+  }
+}
+
+async function persist(name) {
+  if (busy || saved || !token || finalScore === null) return;
+  const current = generation;
+  busy = true;
+  // Store only the private recovery capability locally. The score itself lives in SQLite.
+  remember(); controls();
+  $('score-status').textContent = name === undefined ? 'Saving your score…' : 'Saving your name…';
+  try {
+    const body = {token, score: finalScore};
+    if (name !== undefined) body.name = name;
+    const data = await api('scores', body);
+    if (current !== generation) return;
+    refreshVersion++;
+    currentEntry = data.entry;
+    render(data.leaderboard);
+    $('leaderboard-status').textContent = '';
+    if (!data.entry) {
+      qualified = false; replayLocked = false; forget();
+      $('score-status').textContent = 'Enter your name to share your score.';
+    } else if (data.entry.name) {
+      saved = true; replayLocked = false; forget();
+      $('player-name').value = data.entry.name;
+      try { localStorage.setItem('kimi-player-name', data.entry.name); } catch {}
+      $('score-status').textContent = `Score saved! Your rank is #${data.entry.rank}.`;
+    } else {
+      qualified = true; replayLocked = true;
+      $('score-status').textContent = 'Score saved as —. Enter your name to unlock REPLAY.';
+    }
+  } catch (error) {
+    if (current !== generation) return;
+    $('score-status').textContent = error.message;
+    // An expired, unsubmitted game cannot be recovered; avoid trapping the player forever.
+    if ([400, 410].includes(error.status)) {
+      forget(); token = null; replayLocked = false;
+    } else {
+      replayLocked = qualified !== false;
+    }
+  } finally {
+    if (current === generation) { busy = false; controls(); }
   }
 }
 
 export async function showLeaderboard(score) {
   finalScore = score;
   const current = generation;
+  replayLocked = !testing; controls();
   refresh();
   const result = await tokenPromise;
   if (current !== generation) return;
-  $('save-score').disabled = !result?.token;
-  $('score-status').textContent = testing ? 'Test game: scores are not saved.' :
-    result?.token ? 'Enter your name to share your score.' :
-    'Unranked game: unable to connect at the start. Play again when connected.';
+  token = result?.token || null;
+  if (!token) {
+    replayLocked = false; controls();
+    $('score-status').textContent = testing ? 'Test game: scores are not saved.' :
+      'Unranked game: unable to connect at the start. Play again when connected.';
+    return;
+  }
+  await persist();
 }
 
-$('refresh-scores').addEventListener('click', refresh);
+$('refresh-scores').addEventListener('click', () => {
+  refresh();
+  if (!saved && token && finalScore !== null) persist();
+});
+window.addEventListener('online', () => {
+  if (!saved && token && finalScore !== null) persist();
+});
 try { $('player-name').value = localStorage.getItem('kimi-player-name') || ''; } catch {}
-$('score-form').addEventListener('submit', async event => {
+$('score-form').addEventListener('submit', event => {
   event.preventDefault();
-  if (saved || finalScore === null || $('save-score').disabled) return;
+  if ($('save-score').disabled) return;
   const name = $('player-name').value.trim();
   if (!name) { $('player-name').focus(); return; }
-  const current = generation, score = finalScore;
-  $('save-score').disabled = true;
-  $('player-name').disabled = true;
-  $('score-status').textContent = 'Saving…';
-  try {
-    const run = await tokenPromise;
-    const data = await api('scores', {token: run.token, name, score});
-    if (current !== generation) return;
-    saved = true;
-    refreshVersion++;
-    try { localStorage.setItem('kimi-player-name', name); } catch {}
-    render(data.leaderboard, data.entry.id);
-    $('score-status').textContent = `Score saved! Your rank is #${data.entry.rank}.`;
-    $('save-score').setAttribute('aria-label', 'Saved');
-  } catch (error) {
-    if (current !== generation) return;
-    $('score-status').textContent = error.name === 'AbortError' ? 'Slow connection. Try again: your score will not be saved twice.' :
-      error.message === 'Failed to fetch' ? 'Connection lost. Please try again.' : error.message;
-    $('save-score').disabled = false;
-    $('player-name').disabled = false;
-  }
+  persist(name);
 });

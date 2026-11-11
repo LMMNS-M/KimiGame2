@@ -3,7 +3,7 @@ import {IMAGES, VIDEO} from './assets.js';
 import {createTimeline,Score} from './timeline.js';
 import {AudioManager} from './audio.js';
 import {loadWithin,optional,seekVideo,prepareVideo,waitForPlayback} from './loading.js';
-import {resetLeaderboard,beginLeaderboardRun,showLeaderboard} from './leaderboard.js';
+import {resetLeaderboard,beginLeaderboardRun,showLeaderboard,restorePendingScore,canReplay} from './leaderboard.js';
 const $=id=>document.getElementById(id);
 const STORAGE_KEY=new URLSearchParams(location.search).has('test')?'kimi-wishes-test-best':'kimi-wishes-best';
 export function art(name){
@@ -46,6 +46,7 @@ function reset(){
  $('combo').className='';$('timer').classList.remove('urgent');$('time-fill').style.transform='scaleX(1)';$('next-message').textContent='';syncScore();
 }
 async function start(sound){
+ if(!canReplay())return;
  reset();run++;state='starting';$('game').dataset.scene='start';$('start-screen').hidden=false;$('loading').textContent='Loading the stars…';
  // Both media activation calls originate in the button gesture, before awaiting anything.
  stopPreview();optional(()=>audio.unlock());seekVideo(video,0);video.muted=audio.muted;
@@ -59,6 +60,7 @@ async function start(sound){
 }
 bindButton('start','start-game-normal','start-game-pressed','button-start',start);
 function returnToStart(sound){
+ if(!canReplay())return;
  reset();state='ready';epoch=goAt=endAt=0;
  video.pause();seekVideo(video,0);
  $('game').dataset.scene='start';$('start-screen').hidden=false;
@@ -100,8 +102,8 @@ $('playfield').addEventListener('pointerdown',event=>{
  const node=event.target.closest('.star');if(!node)return;const item=active.get(Number(node.dataset.id));if(item)catchStar(item,performance.now());
 });
 function announce(kind){$('announcement').replaceChildren(art(kind==='hurry'?'hurry-up':'time-up'));$('announcement').className='';$('announcement').setAttribute('aria-label',kind==='hurry'?'HURRY UP!':'TIME UP!');$('announcement').hidden=false;}
-function finish(){state='ending';endAt=goAt+C.GAME_DURATION*1000;for(const item of active.values())item.node.remove();active.clear();$('countdown').hidden=true;$('time-fill').style.transform='scaleX(0)';announce('time');audio.play('time-up');newRecord=score.value>priorBest;if(newRecord){best=score.value;try{localStorage.setItem(STORAGE_KEY,String(best));}catch{}}}
-function showResult(){state='result';$('game').dataset.scene='result';$('hud').hidden=true;$('timer').hidden=true;$('announcement').hidden=true;$('final-score').textContent=score.value;$('end-screen').hidden=false;audio.play('end-screen');showLeaderboard(score.value);}
+function finish(){state='ending';showLeaderboard(score.value);endAt=goAt+C.GAME_DURATION*1000;for(const item of active.values())item.node.remove();active.clear();$('countdown').hidden=true;$('time-fill').style.transform='scaleX(0)';announce('time');audio.play('time-up');newRecord=score.value>priorBest;if(newRecord){best=score.value;try{localStorage.setItem(STORAGE_KEY,String(best));}catch{}}}
+function showResult(){state='result';$('game').dataset.scene='result';$('hud').hidden=true;$('timer').hidden=true;$('announcement').hidden=true;$('final-score').textContent=score.value;$('end-screen').hidden=false;audio.play('end-screen');}
 function tick(now){
  effects=effects.filter(e=>{if(now>=e.until){e.done();return false;}return true;});
  if(state==='countdown'){
@@ -139,7 +141,14 @@ async function init(){
   ()=>audio.preload(),
   ...Object.values(IMAGES).map(a=>()=>new Promise(resolve=>{const img=new Image();img.onload=img.onerror=resolve;img.src=a.src;}))
  ]);
- if(state==='loading'){state='ready';$('loading').textContent='';$('start').disabled=false;}
+ if(state==='loading'){
+  state='ready';$('loading').textContent='';$('start').disabled=false;
+  const pendingScore=restorePendingScore();
+  if(pendingScore!==null){
+   score.value=pendingScore;$('start-screen').hidden=true;
+   showResult();showLeaderboard(pendingScore);
+  }
+ }
 }
 requestAnimationFrame(tick);init();
 // Read-only diagnostics for integration checks, with no way to alter game time or score.
