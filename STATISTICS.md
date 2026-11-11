@@ -12,7 +12,7 @@ Les parties effectuées hors ligne peuvent être déclarées au retour de la con
 
 ## Consentement et mesures
 
-« Privacy » propose un refus et une acceptation des statistiques, sans effet sur le jeu. La géolocalisation approximative est un choix distinct, décoché par défaut. Le navigateur persistant n'est créé pour les statistiques qu'après consentement. Aucun GPS, identifiant dérivé de l'IP ou fingerprinting. Les scores publics nécessaires au classement restent séparés.
+Aucun panneau ne s’ouvre au démarrage. « ! » affiche « Privacy info », qui ouvre les préférences. Pour les nouveaux visiteurs, les statistiques et toutes les catégories sont activées par défaut. Les refus et choix géographiques déjà enregistrés restent respectés. La case principale coupe ou réactive la collecte ; « More info » permet de choisir visites, progression, scores/pseudos, appareil et géolocalisation. Les changements sont immédiats et les événements en attente sont filtrés selon les choix actuels. Un identifiant aléatoire persistant est créé lorsque la collecte est activée. Aucun GPS, identifiant dérivé de l'IP ou fingerprinting. Les scores publics nécessaires au classement restent séparés.
 
 Les événements sont dédupliqués par identifiant. La file locale consentie est limitée à 400 événements et 7 jours, avec délai réseau de 3 secondes, 8 tentatives par cycle et temporisation progressive. Une nouvelle navigation ou le retour en ligne relance les tentatives. Le jeu n'attend jamais ces appels.
 
