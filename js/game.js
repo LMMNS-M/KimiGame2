@@ -21,6 +21,7 @@ $('game').style.setProperty('--visual-ratio',`${87.5*.85/C.HITBOX_SCALE}%`);
 const video=$('background'),audio=new AudioManager();video.src=VIDEO;video.volume=.8;
 const stopPreview=prepareVideo(video);
 let lastRedFlash=-Infinity;
+let firstStarsMissed=0, firstStarCaught=false;
 function flashRed(now){
  // One soft pulse per catch, with a short cooldown for near-simultaneous reds.
  if(now-lastRedFlash<400)return;
@@ -40,6 +41,8 @@ function bindButton(id,normal,pressed,sound,action){
 function syncScore(){$('score').textContent=score.value;$('best-value').textContent=Math.max(best,score.value);}
 function comboBreak(){audio.play('combo-break');$('combo').className='leave';effects.push({until:performance.now()+180,done:()=>{$('combo').hidden=!score.combo;}});}
 function reset(){
+ firstStarsMissed=0;firstStarCaught=false;$('catch-hint').hidden=true;
+ $('info-panel').hidden=true;$('privacy-open').setAttribute('aria-expanded','false');
  $('red-flash').classList.remove('hit');lastRedFlash=-Infinity;
  resetLeaderboard();
  audio.stop();active.clear();effects=[];$('playfield').replaceChildren();score=new Score();timeline=createTimeline();cursor=0;hurry=false;lastCount=-1;recordShown=false;priorBest=best;newRecord=false;
@@ -89,10 +92,20 @@ $('sound').addEventListener('click',()=>{audio.mute(!audio.muted);video.muted=au
 function count(n){$('countdown').hidden=false;$('countdown').textContent=n===3?'GO!':String(3-n);$('countdown').className='';void $('countdown').offsetWidth;$('countdown').className='pop';audio.play(n===3?'countown-go':'countdown-beep');}
 function warning(event){const node=document.createElement('div');node.className='warning';node.style.left=`${event.x*100}%`;$('playfield').append(node);active.set(event.id,{event,node,falling:false});}
 function fall(item){item.node.remove();const node=document.createElement('div');node.className=`star ${item.event.type}`;node.dataset.id=item.event.id;node.append(art(`${item.event.type}-star`));$('playfield').append(node);item.node=node;item.falling=true;audio.shooting();}
-function expire(item){item.node.remove();active.delete(item.event.id);audio.play('star-ground-hit');if(score.miss(item.event.type))comboBreak();}
+function expire(item){
+ if(timeline.slice(0,3).some(event=>event.id===item.event.id)){
+  firstStarsMissed++;
+  if(firstStarsMissed===3&&!firstStarCaught){
+   $('catch-hint').hidden=false;
+   effects.push({until:performance.now()+4500,done:()=>{$('catch-hint').hidden=true;}});
+  }
+ }
+ item.node.remove();active.delete(item.event.id);audio.play('star-ground-hit');if(score.miss(item.event.type))comboBreak();}
 function catchStar(item,now){
  if(state!=='playing'||now>=goAt+C.GAME_DURATION*1000||!item.falling||!active.has(item.event.id))return;
  const elapsed=(now-goAt)/1000;if(elapsed<item.event.at||elapsed>=item.event.at+C.STAR_FALL_DURATION)return;
+ if(timeline.slice(0,3).some(event=>event.id===item.event.id))firstStarCaught=true;
+ $('catch-hint').hidden=true;
  active.delete(item.event.id);item.node.remove();const result=score.catch(item.event.type);syncScore();
  if(item.event.type==='red')flashRed(now);
  audio.play(item.event.type==='red'?'red-star-cach':`${item.event.type}-star-catch`);
@@ -105,7 +118,7 @@ $('playfield').addEventListener('pointerdown',event=>{
  const node=event.target.closest('.star');if(!node)return;const item=active.get(Number(node.dataset.id));if(item)catchStar(item,performance.now());
 });
 function announce(kind){$('announcement').replaceChildren(art(kind==='hurry'?'hurry-up':'time-up'));$('announcement').className='';$('announcement').setAttribute('aria-label',kind==='hurry'?'HURRY UP!':'TIME UP!');$('announcement').hidden=false;}
-function finish(){state='ending';gameComplete(score.value,Math.max(best,score.value));showLeaderboard(score.value);endAt=goAt+C.GAME_DURATION*1000;for(const item of active.values())item.node.remove();active.clear();$('countdown').hidden=true;$('time-fill').style.transform='scaleX(0)';announce('time');audio.play('time-up');newRecord=score.value>priorBest;if(newRecord){best=score.value;try{localStorage.setItem(STORAGE_KEY,String(best));}catch{}}}
+function finish(){$('catch-hint').hidden=true;state='ending';gameComplete(score.value,Math.max(best,score.value));showLeaderboard(score.value);endAt=goAt+C.GAME_DURATION*1000;for(const item of active.values())item.node.remove();active.clear();$('countdown').hidden=true;$('time-fill').style.transform='scaleX(0)';announce('time');audio.play('time-up');newRecord=score.value>priorBest;if(newRecord){best=score.value;try{localStorage.setItem(STORAGE_KEY,String(best));}catch{}}}
 function showResult(){state='result';$('game').dataset.scene='result';$('hud').hidden=true;$('timer').hidden=true;$('announcement').hidden=true;$('final-score').textContent=score.value;$('end-screen').hidden=false;audio.play('end-screen');}
 function tick(now){
  effects=effects.filter(e=>{if(now>=e.until){e.done();return false;}return true;});

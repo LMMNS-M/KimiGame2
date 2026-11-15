@@ -17,6 +17,7 @@
 <section id="start-screen" class="screen"><div class="start-content"><div data-art="rules-frame"></div><button id="start" class="image-button" aria-label="Start Game" disabled></button><p id="loading" role="status">Loading the stars…</p></div></section>
 <div id="countdown" hidden aria-live="polite"></div>
 <div id="announcement" hidden></div>
+<p id="catch-hint" role="status" hidden>Tap to catch the stars</p>
 <div id="hud" hidden><div id="wishes"><div data-art="wishes-counter-frame"></div><output id="score">0</output><div id="combo" data-art="combo-x2" hidden></div></div><div id="best"><div data-art="best-score-frame"></div><output id="best-value">0</output></div></div>
 <section id="end-screen" class="screen" hidden aria-label="Results"><div class="end-content">
 <div id="result"><div data-art="result-frame"></div><output id="final-score">0</output><div id="record" data-art="new-best-score" hidden></div></div>
@@ -33,7 +34,15 @@
 </div></section>
 <button id="resume" hidden>Tap to resume ♪</button>
 </main>
-<div id="preferences"><button id="privacy-open" aria-label="Privacy information" aria-expanded="false" aria-controls="privacy-info">!</button><button id="privacy-info" hidden>Privacy info</button><button id="pending-open" hidden>Pending scores</button></div>
+<div id="preferences"><button id="privacy-open" aria-label="Privacy information" aria-expanded="false" aria-controls="info-panel">!</button><section id="info-panel" hidden aria-labelledby="info-title">
+<h2 id="info-title">Tap to catch the stars!</h2>
+<ul class="star-rules">
+<li><span data-art="white-star" aria-hidden="true"></span><strong>+1 point</strong></li>
+<li><span data-art="gold-star" aria-hidden="true"></span><strong>+3 points</strong></li>
+<li><span data-art="red-star" aria-hidden="true"></span><strong>−1 point</strong></li>
+</ul>
+<button id="privacy-info" type="button">Privacy</button>
+</section><button id="pending-open" hidden>Pending scores</button></div>
 <dialog id="pending-dialog" class="settings-panel"><h2>Pending scores</h2><p>Only this browser can name these scores. Starting a new game does not erase them.</p><div id="pending-list"></div><button id="pending-close">Close</button></dialog>
 <dialog id="privacy-dialog" class="settings-panel"><h2>Privacy info</h2>
 <label class="privacy-choice"><input id="privacy-enabled" type="checkbox"> Save my data for an optimal game experience</label>
