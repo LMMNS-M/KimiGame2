@@ -464,3 +464,4 @@ output {
 .star-rules [data-art]{display:block;width:26px}
 #preferences #privacy-info{min-height:44px;border:0;background:transparent;color:#c8d3e4;text-decoration:underline;font-size:12px;padding:8px 14px}
 #catch-hint{position:absolute;z-index:12;top:38%;left:8%;width:84%;margin:0;padding:12px 8px;text-align:center;font-weight:bold;font-size:clamp(16px,5cqw,24px);color:#fff2bf;background:linear-gradient(90deg,transparent,#13223ae6 15%,#13223ae6 85%,transparent);text-shadow:0 2px 5px #000,0 0 12px #c39b59;pointer-events:none}
+@media(max-height:600px){#info-panel{padding-top:5px;padding-bottom:0}#info-title{font-size:14px;margin-bottom:4px}.star-rules{gap:2px}.star-rules li{min-height:22px;grid-template-columns:22px 100px;font-size:14px}.star-rules [data-art]{width:22px}}
