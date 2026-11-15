@@ -3,10 +3,9 @@ import {IMAGES, VIDEO} from './assets.js';
 import {createTimeline,Score} from './timeline.js';
 import {AudioManager} from './audio.js';
 import {loadWithin,optional,seekVideo,prepareVideo,waitForPlayback} from './loading.js';
-import {resetLeaderboard,beginLeaderboardRun,showLeaderboard,canReplay} from './leaderboard.js';
-import {initializeStatistics,gameStarted,gameComplete,track} from './statistics.js';
+import {resetLeaderboard,beginLeaderboardRun,showLeaderboard,canReplay,getWorldBest,refreshWorldBest} from './leaderboard.js';
+import {initializeStatistics,gameStarted,gameComplete,track} from './telemetry.js';
 const $=id=>document.getElementById(id);
-const STORAGE_KEY=new URLSearchParams(location.search).has('test')?'kimi-wishes-test-best':'kimi-wishes-best';
 export function art(name){
  const a=IMAGES[name],el=document.createElement('div');el.className='art';const [x,y,r,b]=a.box,w=r-x,h=b-y;
  el.style.aspectRatio=`${w}/${h}`;const img=new Image();img.src=a.src;img.alt='';img.draggable=false;
@@ -29,7 +28,9 @@ function flashRed(now){
  const overlay=$('red-flash');overlay.classList.remove('hit');void overlay.offsetWidth;overlay.classList.add('hit');
 }
 let state='loading',score=new Score(),timeline=[],cursor=0,active=new Map(),effects=[],epoch=0,goAt=0,endAt=0,lastCount=-1,hurry=false,newRecord=false,recordShown=false,best=0,priorBest=0,run=0,width=0,height=0;
-try{best=Math.max(0,Math.trunc(Number(localStorage.getItem(STORAGE_KEY)))||0);}catch{}
+best=getWorldBest();
+window.addEventListener('kimi:world-best',event=>{best=event.detail;$('best-value').textContent=best;});
+void refreshWorldBest();
 $('best-value').textContent=best;
 new ResizeObserver(()=>{width=$('game').clientWidth;height=$('playfield').clientHeight;}).observe($('game'));
 function bindButton(id,normal,pressed,sound,action){
@@ -38,7 +39,7 @@ function bindButton(id,normal,pressed,sound,action){
  for(const event of ['pointerup','pointercancel','pointerleave'])button.addEventListener(event,()=>button.classList.remove('pressed'));
  button.addEventListener('click',async()=>{if(button.disabled)return;button.disabled=true;button.classList.add('pressed');try{await action(sound);}finally{button.disabled=false;button.classList.remove('pressed');}});
 }
-function syncScore(){$('score').textContent=score.value;$('best-value').textContent=Math.max(best,score.value);}
+function syncScore(){$('score').textContent=score.value;$('best-value').textContent=best;}
 function comboBreak(){audio.play('combo-break');$('combo').className='leave';effects.push({until:performance.now()+180,done:()=>{$('combo').hidden=!score.combo;}});}
 function reset(){
  firstStarsMissed=0;firstStarCaught=false;$('catch-hint').hidden=true;
@@ -118,7 +119,7 @@ $('playfield').addEventListener('pointerdown',event=>{
  const node=event.target.closest('.star');if(!node)return;const item=active.get(Number(node.dataset.id));if(item)catchStar(item,performance.now());
 });
 function announce(kind){$('announcement').replaceChildren(art(kind==='hurry'?'hurry-up':'time-up'));$('announcement').className='';$('announcement').setAttribute('aria-label',kind==='hurry'?'HURRY UP!':'TIME UP!');$('announcement').hidden=false;}
-function finish(){$('catch-hint').hidden=true;state='ending';gameComplete(score.value,Math.max(best,score.value));showLeaderboard(score.value);endAt=goAt+C.GAME_DURATION*1000;for(const item of active.values())item.node.remove();active.clear();$('countdown').hidden=true;$('time-fill').style.transform='scaleX(0)';announce('time');audio.play('time-up');newRecord=score.value>priorBest;if(newRecord){best=score.value;try{localStorage.setItem(STORAGE_KEY,String(best));}catch{}}}
+function finish(){$('catch-hint').hidden=true;state='ending';gameComplete(score.value,best);showLeaderboard(score.value);endAt=goAt+C.GAME_DURATION*1000;for(const item of active.values())item.node.remove();active.clear();$('countdown').hidden=true;$('time-fill').style.transform='scaleX(0)';announce('time');audio.play('time-up');newRecord=score.value>Math.max(priorBest,best);}
 function showResult(){state='result';$('game').dataset.scene='result';$('hud').hidden=true;$('timer').hidden=true;$('announcement').hidden=true;$('final-score').textContent=score.value;$('end-screen').hidden=false;audio.play('end-screen');}
 function tick(now){
  effects=effects.filter(e=>{if(now>=e.until){e.done();return false;}return true;});

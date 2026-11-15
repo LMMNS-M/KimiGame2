@@ -1,5 +1,5 @@
 import {API_BASE_URL} from './server-config.js';
-import {scoreContext,scoreConfirmed} from './statistics.js';
+import {scoreContext,scoreConfirmed} from './telemetry.js';
 const $ = id => document.getElementById(id);
 const testing = new URLSearchParams(location.search).has('test');
 const PENDING_KEY = 'kimi-pending-score-v2';
@@ -19,10 +19,38 @@ let generation = 0, refreshVersion = 0, tokenPromise = Promise.resolve(null);
 let finalScore = null, token = null, saved = false, busy = false, replayLocked = false;
 let qualified = null, currentEntry = null;
 let persistTimer, persistAttempts = 0;
+// This cache contains only a confirmed server TOP 1, never a personal score.
+const WORLD_KEY = 'kimi-world-best-v1';
+let worldBest = 0, worldRequest, worldRetry, worldAttempts = 0;
+try {
+  const cached = JSON.parse(localStorage.getItem(WORLD_KEY));
+  if (!testing && cached?.source === API_BASE_URL && Number.isInteger(cached.score) && cached.score >= 0 && cached.score <= 165) worldBest = cached.score;
+} catch {}
+export function getWorldBest() { return worldBest; }
+function acceptLeaderboard(entries) {
+  if (!Array.isArray(entries)) return;
+  const value = entries.length ? entries[0]?.score : 0;
+  if (!Number.isInteger(value) || value < 0 || value > 165) return;
+  worldBest = value;
+  if (!testing) try {localStorage.setItem(WORLD_KEY, JSON.stringify({source:API_BASE_URL,score:value}));} catch {}
+  window.dispatchEvent(new CustomEvent('kimi:world-best', {detail:value}));
+}
+export function refreshWorldBest() {
+  if (testing) return Promise.resolve();
+  if (worldRequest) return worldRequest;
+  clearTimeout(worldRetry);
+  worldRequest = api('leaderboard').then(() => { worldAttempts = 0; }).catch(() => {
+    if (worldAttempts < 8) worldRetry = setTimeout(refreshWorldBest, Math.min(300000,2000*2**worldAttempts++));
+  }).finally(() => { worldRequest = null; });
+  return worldRequest;
+}
+window.addEventListener('online', () => {worldAttempts=0;refreshWorldBest();});
+document.addEventListener('visibilitychange', () => {if (!document.hidden) {worldAttempts=0;refreshWorldBest();}});
+
 
 async function api(path, body) {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 4000);
+  const timeout = setTimeout(() => controller.abort(), 12000);
   try {
     const response = await fetch(`${API_BASE_URL}/api/${path}`, {
       method: body === undefined ? 'GET' : 'POST',
@@ -37,6 +65,7 @@ async function api(path, body) {
       error.status = response.status;
       throw error;
     }
+    if (Array.isArray(data.leaderboard)) acceptLeaderboard(data.leaderboard);
     return data;
   } finally { clearTimeout(timeout); }
 }
@@ -140,6 +169,7 @@ export function resetLeaderboard() {
 }
 
 export function beginLeaderboardRun() {
+  void refreshWorldBest();
   runStarted = Date.now()/1000;
   const localToken = uid();
   tokenPromise = testing ? Promise.resolve(null) : api('runs', {token:localToken}).catch(() => ({token:localToken}));
